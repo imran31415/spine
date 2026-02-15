@@ -22,7 +22,8 @@ type Position struct {
 
 // NodeData is the data stored in each graph node.
 type NodeData struct {
-	Label string `json:"label"`
+	Label  string `json:"label"`
+	Status string `json:"status,omitempty"`
 }
 
 // EdgeData is the data stored in each graph edge.
@@ -80,10 +81,11 @@ type graphResp struct {
 }
 
 type nodeResp struct {
-	ID    string  `json:"id"`
-	Label string  `json:"label"`
-	X     float64 `json:"x"`
-	Y     float64 `json:"y"`
+	ID     string  `json:"id"`
+	Label  string  `json:"label"`
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Status string  `json:"status,omitempty"`
 }
 
 type edgeResp struct {
@@ -122,7 +124,7 @@ func (s *server) buildGraphResp(result *algoResultResp) graphResp {
 	nr := make([]nodeResp, len(nodes))
 	for i, n := range nodes {
 		pos := s.positions[n.ID]
-		nr[i] = nodeResp{ID: n.ID, Label: n.Data.Label, X: pos.X, Y: pos.Y}
+		nr[i] = nodeResp{ID: n.ID, Label: n.Data.Label, X: pos.X, Y: pos.Y, Status: n.Data.Status}
 	}
 	edges := s.graph.Edges()
 	er := make([]edgeResp, len(edges))
@@ -368,6 +370,211 @@ func pathToEdges(path []string) [][2]string {
 	return edges
 }
 
+func (s *server) handleGetTemplates(w http.ResponseWriter, r *http.Request) {
+	summaries := make([]templateSummary, len(templates))
+	for i, t := range templates {
+		summaries[i] = t.summary()
+	}
+	writeJSON(w, summaries)
+}
+
+func (s *server) handleLoadTemplate(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID string `json:"id"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	var tmpl *Template
+	for i := range templates {
+		if templates[i].ID == req.ID {
+			tmpl = &templates[i]
+			break
+		}
+	}
+	if tmpl == nil {
+		http.Error(w, "template not found", 404)
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.graph = spine.NewGraph[NodeData, EdgeData](tmpl.Directed)
+	s.positions = make(map[string]Position)
+	for _, n := range tmpl.Nodes {
+		s.graph.AddNode(n.ID, NodeData{Label: n.Label, Status: n.Status})
+		s.positions[n.ID] = Position{X: n.X, Y: n.Y}
+	}
+	for _, e := range tmpl.Edges {
+		s.graph.AddEdge(e.From, e.To, EdgeData{Label: e.Label}, e.Weight)
+	}
+	s.computeReady()
+	writeJSON(w, s.buildGraphResp(nil))
+}
+
+var validStatuses = map[string]bool{
+	"pending": true, "ready": true, "running": true,
+	"done": true, "failed": true, "skipped": true,
+}
+
+// computeReady auto-promotes pending nodes to ready when all in-edge sources are done.
+func (s *server) computeReady() {
+	for _, n := range s.graph.Nodes() {
+		if n.Data.Status != "pending" {
+			continue
+		}
+		inEdges := s.graph.InEdges(n.ID)
+		allDone := true
+		for _, e := range inEdges {
+			src, ok := s.graph.GetNode(e.From)
+			if !ok || src.Data.Status != "done" {
+				allDone = false
+				break
+			}
+		}
+		if allDone && len(inEdges) > 0 {
+			s.graph.AddNode(n.ID, NodeData{Label: n.Data.Label, Status: "ready"})
+		}
+	}
+}
+
+func (s *server) handleUpdateNodeStatus(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	if !validStatuses[req.Status] {
+		http.Error(w, fmt.Sprintf("invalid status: %s", req.Status), 400)
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n, ok := s.graph.GetNode(req.ID)
+	if !ok {
+		http.Error(w, "node not found", 404)
+		return
+	}
+	s.graph.AddNode(req.ID, NodeData{Label: n.Data.Label, Status: req.Status})
+	s.computeReady()
+	writeJSON(w, s.buildGraphResp(nil))
+}
+
+type planTask struct {
+	ID           string   `json:"id"`
+	Label        string   `json:"label"`
+	Status       string   `json:"status"`
+	Dependencies []string `json:"dependencies"`
+	X            float64  `json:"x"`
+	Y            float64  `json:"y"`
+}
+
+func (s *server) handleLoadPlan(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Tasks []planTask `json:"tasks"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.graph = spine.NewGraph[NodeData, EdgeData](true)
+	s.positions = make(map[string]Position)
+
+	// Build dependency map for auto-layout
+	depMap := make(map[string][]string)
+	taskMap := make(map[string]*planTask)
+	for i := range req.Tasks {
+		t := &req.Tasks[i]
+		taskMap[t.ID] = t
+		depMap[t.ID] = t.Dependencies
+	}
+
+	// Auto-layout: compute topological depth for each node
+	needsLayout := false
+	for _, t := range req.Tasks {
+		if t.X == 0 && t.Y == 0 {
+			needsLayout = true
+			break
+		}
+	}
+
+	if needsLayout {
+		depth := make(map[string]int)
+		var computeDepth func(id string) int
+		computeDepth = func(id string) int {
+			if d, ok := depth[id]; ok {
+				return d
+			}
+			depth[id] = 0
+			maxDep := 0
+			for _, dep := range depMap[id] {
+				d := computeDepth(dep) + 1
+				if d > maxDep {
+					maxDep = d
+				}
+			}
+			depth[id] = maxDep
+			return maxDep
+		}
+		for _, t := range req.Tasks {
+			computeDepth(t.ID)
+		}
+
+		// Group by depth level
+		levels := make(map[int][]string)
+		maxLevel := 0
+		for _, t := range req.Tasks {
+			d := depth[t.ID]
+			levels[d] = append(levels[d], t.ID)
+			if d > maxLevel {
+				maxLevel = d
+			}
+		}
+
+		// Assign positions
+		for level := 0; level <= maxLevel; level++ {
+			ids := levels[level]
+			for i, id := range ids {
+				t := taskMap[id]
+				t.X = 150 + float64(i)*200
+				t.Y = 80 + float64(level)*150
+			}
+		}
+	}
+
+	// Create nodes
+	for _, t := range req.Tasks {
+		status := t.Status
+		if status == "" {
+			status = "pending"
+		}
+		label := t.Label
+		if label == "" {
+			label = t.ID
+		}
+		s.graph.AddNode(t.ID, NodeData{Label: label, Status: status})
+		s.positions[t.ID] = Position{X: t.X, Y: t.Y}
+	}
+
+	// Create dependency edges (dep → task)
+	for _, t := range req.Tasks {
+		for _, dep := range t.Dependencies {
+			s.graph.AddEdge(dep, t.ID, EdgeData{}, 1)
+		}
+	}
+
+	s.computeReady()
+	writeJSON(w, s.buildGraphResp(nil))
+}
+
 func (s *server) handleClear(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -402,7 +609,11 @@ func main() {
 	mux.HandleFunc("/api/node/position", s.handleUpdatePos)
 	mux.HandleFunc("/api/graph/directed", s.handleSetDirected)
 	mux.HandleFunc("/api/graph/clear", s.handleClear)
+	mux.HandleFunc("/api/templates", s.handleGetTemplates)
+	mux.HandleFunc("/api/template/load", s.handleLoadTemplate)
 	mux.HandleFunc("/api/algo", s.handleAlgo)
+	mux.HandleFunc("/api/node/status", s.handleUpdateNodeStatus)
+	mux.HandleFunc("/api/plan/load", s.handleLoadPlan)
 
 	addr := ":8090"
 	fmt.Printf("Spine visualizer running at http://localhost%s\n", addr)
