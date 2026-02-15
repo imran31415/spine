@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spine — Graph Visualizer</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #242836;
+  --border: #2e3345;
+  --text: #e1e4ed;
+  --text2: #8b90a0;
+  --accent: #6c7bff;
+  --accent2: #4a56d6;
+  --green: #34d399;
+  --red: #f87171;
+  --orange: #fbbf24;
+  --cyan: #22d3ee;
+  --pink: #f472b6;
+  --radius: 8px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+}
+
+/* Sidebar */
+#sidebar {
+  width: 280px;
+  min-width: 280px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+#sidebar h1 {
+  font-size: 18px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
+#sidebar h1 span { color: var(--accent); }
+
+.section {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text2);
+  margin-bottom: 10px;
+}
+
+.row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+input, select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  outline: none;
+  flex: 1;
+  min-width: 0;
+}
+
+input:focus, select:focus {
+  border-color: var(--accent);
+}
+
+input::placeholder { color: var(--text2); }
+
+button {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+button:hover {
+  background: var(--border);
+  border-color: var(--accent);
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 500;
+}
+
+button.primary:hover {
+  background: var(--accent2);
+}
+
+button.danger {
+  color: var(--red);
+}
+
+button.danger:hover {
+  background: rgba(248, 113, 113, 0.1);
+  border-color: var(--red);
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.toggle-row label {
+  font-size: 13px;
+  color: var(--text2);
+}
+
+.toggle {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  cursor: pointer;
+}
+
+.toggle input { display: none; }
+
+.toggle .slider {
+  position: absolute;
+  inset: 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  transition: 0.2s;
+}
+
+.toggle .slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 2px;
+  top: 2px;
+  background: var(--text2);
+  border-radius: 50%;
+  transition: 0.2s;
+}
+
+.toggle input:checked + .slider {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.toggle input:checked + .slider::before {
+  transform: translateX(18px);
+  background: #fff;
+}
+
+.algo-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.algo-grid button {
+  font-size: 12px;
+  padding: 6px 4px;
+  text-align: center;
+}
+
+/* Result panel */
+#result-panel {
+  display: none;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+#result-panel.visible { display: block; }
+
+#result-panel .result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+#result-panel .result-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+#result-content {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+#result-content .highlight { color: var(--green); font-weight: 500; }
+#result-content .error { color: var(--red); }
+
+/* Info bar */
+#info {
+  padding: 12px 16px;
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.6;
+}
+
+#info kbd {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-family: inherit;
+}
+
+/* Canvas area */
+#canvas-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Tooltip */
+#tooltip {
+  display: none;
+  position: absolute;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  max-width: 220px;
+}
+
+#tooltip .tt-id { color: var(--accent); font-weight: 600; }
+#tooltip .tt-detail { color: var(--text2); margin-top: 2px; }
+
+/* Mode indicator */
+#mode-indicator {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+#mode-indicator.visible { opacity: 1; }
+
+/* Animation keyframes for result highlights */
+@keyframes pulse-node {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1><span>&#9670;</span> Spine Visualizer</h1>
+
+  <div class="section">
+    <div class="section-title">Graph Mode</div>
+    <div class="toggle-row">
+      <label>Directed</label>
+      <label class="toggle">
+        <input type="checkbox" id="directed-toggle" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+    <button class="danger" style="width:100%" onclick="clearGraph()">Clear Graph</button>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Add Node</div>
+    <div class="row">
+      <input id="node-id" placeholder="Node ID">
+      <input id="node-label" placeholder="Label (opt)">
+    </div>
+    <button class="primary" style="width:100%" onclick="addNodeFromForm()">Add Node</button>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Add Edge</div>
+    <div class="row">
+      <input id="edge-from" placeholder="From">
+      <input id="edge-to" placeholder="To">
+    </div>
+    <div class="row">
+      <input id="edge-weight" placeholder="Weight" type="number" value="1" step="any">
+    </div>
+    <button class="primary" style="width:100%" onclick="addEdgeFromForm()">Add Edge</button>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Algorithms</div>
+    <div class="row">
+      <input id="algo-start" placeholder="Start node">
+      <input id="algo-end" placeholder="End node">
+    </div>
+    <div class="algo-grid">
+      <button onclick="runAlgo('bfs')">BFS</button>
+      <button onclick="runAlgo('dfs')">DFS</button>
+      <button onclick="runAlgo('shortest-path')">Shortest Path</button>
+      <button onclick="runAlgo('topo-sort')">Topo Sort</button>
+      <button onclick="runAlgo('cycle-detect')">Cycle Detect</button>
+      <button onclick="runAlgo('components')">Components</button>
+      <button onclick="runAlgo('roots')">Roots</button>
+      <button onclick="runAlgo('leaves')">Leaves</button>
+      <button onclick="runAlgo('ancestors')">Ancestors</button>
+      <button onclick="runAlgo('descendants')">Descendants</button>
+    </div>
+  </div>
+
+  <div id="result-panel">
+    <div class="result-header">
+      <span class="result-title" id="result-title">Result</span>
+      <button style="font-size:11px;padding:2px 8px" onclick="clearResult()">Clear</button>
+    </div>
+    <div id="result-content"></div>
+  </div>
+
+  <div id="info">
+    <kbd>Double-click</kbd> canvas to add node<br>
+    <kbd>Click</kbd> node then another to add edge<br>
+    <kbd>Drag</kbd> node to reposition<br>
+    <kbd>Delete</kbd> / <kbd>Backspace</kbd> to remove selected<br>
+    <kbd>Esc</kbd> to cancel / deselect
+  </div>
+</div>
+
+<div id="canvas-wrap">
+  <canvas id="canvas"></canvas>
+  <div id="tooltip"></div>
+  <div id="mode-indicator"></div>
+</div>
+
+<script>
+// ---- State ----
+let state = { directed: true, nodes: [], edges: [], result: null };
+let selected = null;       // { type: 'node'|'edge', id, from?, to? }
+let edgeStart = null;      // node id when creating edge via click
+let dragging = null;       // { id, offsetX, offsetY }
+let hoveredNode = null;
+let hoveredEdge = null;
+let animStep = 0;          // for animated result highlighting
+let animTimer = null;
+let nodeCounter = 0;
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+const modeEl = document.getElementById('mode-indicator');
+
+// ---- API helpers ----
+async function api(path, body) {
+  const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const res = await fetch(path, opts);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+async function fetchGraph() {
+  const res = await fetch('/api/graph');
+  state = await res.json();
+  render();
+}
+
+async function syncState(data) {
+  if (data) {
+    state = data;
+    render();
+  }
+}
+
+// ---- Actions ----
+async function addNodeFromForm() {
+  const id = document.getElementById('node-id').value.trim();
+  if (!id) return;
+  const label = document.getElementById('node-label').value.trim() || id;
+  const cx = canvas.width / (2 * dpr());
+  const cy = canvas.height / (2 * dpr());
+  const x = cx + (Math.random() - 0.5) * 200;
+  const y = cy + (Math.random() - 0.5) * 200;
+  const data = await api('/api/node/add', { id, label, x, y });
+  syncState(data);
+  document.getElementById('node-id').value = '';
+  document.getElementById('node-label').value = '';
+}
+
+async function addNodeAtPos(x, y) {
+  nodeCounter++;
+  const id = 'n' + nodeCounter;
+  const data = await api('/api/node/add', { id, label: id, x, y });
+  syncState(data);
+}
+
+async function removeNode(id) {
+  const data = await api('/api/node/remove', { id });
+  syncState(data);
+}
+
+async function addEdgeFromForm() {
+  const from = document.getElementById('edge-from').value.trim();
+  const to = document.getElementById('edge-to').value.trim();
+  const weight = parseFloat(document.getElementById('edge-weight').value) || 1;
+  if (!from || !to) return;
+  const data = await api('/api/edge/add', { from, to, weight });
+  syncState(data);
+  document.getElementById('edge-from').value = '';
+  document.getElementById('edge-to').value = '';
+}
+
+async function addEdgeAPI(from, to) {
+  const weight = parseFloat(document.getElementById('edge-weight').value) || 1;
+  const data = await api('/api/edge/add', { from, to, weight });
+  syncState(data);
+}
+
+async function removeEdge(from, to) {
+  const data = await api('/api/edge/remove', { from, to });
+  syncState(data);
+}
+
+async function clearGraph() {
+  const data = await api('/api/graph/clear', {});
+  syncState(data);
+  clearResult();
+  nodeCounter = 0;
+}
+
+async function updateNodePos(id, x, y) {
+  api('/api/node/position', { id, x, y });
+  const n = state.nodes.find(n => n.id === id);
+  if (n) { n.x = x; n.y = y; }
+}
+
+document.getElementById('directed-toggle').addEventListener('change', async (e) => {
+  const data = await api('/api/graph/directed', { directed: e.target.checked });
+  syncState(data);
+});
+
+async function runAlgo(algo) {
+  clearResult();
+  const start = document.getElementById('algo-start').value.trim();
+  const end = document.getElementById('algo-end').value.trim();
+  const data = await api('/api/algo?algo=' + algo, { start, end });
+  syncState(data);
+  if (data.result) showResult(data.result);
+}
+
+// ---- Result display ----
+function showResult(result) {
+  const panel = document.getElementById('result-panel');
+  const title = document.getElementById('result-title');
+  const content = document.getElementById('result-content');
+  panel.classList.add('visible');
+  title.textContent = result.algorithm.replace('-', ' ').toUpperCase();
+
+  if (result.error) {
+    content.innerHTML = `<span class="error">${esc(result.error)}</span>`;
+    return;
+  }
+
+  let html = '';
+  if (result.visitedOrder) {
+    html += `<div>Order: <span class="highlight">${result.visitedOrder.join(' → ')}</span></div>`;
+  }
+  if (result.path) {
+    html += `<div>Path: <span class="highlight">${result.path.join(' → ')}</span></div>`;
+    html += `<div>Cost: <span class="highlight">${result.cost}</span></div>`;
+  }
+  if (result.hasCycle !== undefined) {
+    html += `<div>Cycle: <span class="highlight">${result.hasCycle ? 'Yes' : 'No'}</span></div>`;
+    if (result.cycle && result.cycle.length) {
+      html += `<div><span class="highlight">${result.cycle.join(' → ')} → ${result.cycle[0]}</span></div>`;
+    }
+  }
+  if (result.components && result.components.length) {
+    result.components.forEach((c, i) => {
+      html += `<div>Component ${i + 1}: <span class="highlight">${c.join(', ')}</span></div>`;
+    });
+  }
+  if (result.roots && result.roots.length) {
+    html += `<div>Roots: <span class="highlight">${result.roots.join(', ')}</span></div>`;
+  }
+  if (result.leaves && result.leaves.length) {
+    html += `<div>Leaves: <span class="highlight">${result.leaves.join(', ')}</span></div>`;
+  }
+  if (result.ancestors && result.ancestors.length) {
+    html += `<div>Ancestors: <span class="highlight">${result.ancestors.join(', ')}</span></div>`;
+  }
+  if (result.descendants && result.descendants.length) {
+    html += `<div>Descendants: <span class="highlight">${result.descendants.join(', ')}</span></div>`;
+  }
+  content.innerHTML = html || '<span class="highlight">No results</span>';
+
+  // Animate stepping through highlighted nodes
+  if (result.highlightNodes && result.highlightNodes.length > 1) {
+    animStep = 0;
+    if (animTimer) clearInterval(animTimer);
+    animTimer = setInterval(() => {
+      animStep++;
+      if (animStep >= result.highlightNodes.length) {
+        animStep = result.highlightNodes.length;
+        clearInterval(animTimer);
+        animTimer = null;
+      }
+      render();
+    }, 400);
+  }
+  render();
+}
+
+function clearResult() {
+  state.result = null;
+  document.getElementById('result-panel').classList.remove('visible');
+  if (animTimer) { clearInterval(animTimer); animTimer = null; }
+  animStep = 0;
+  render();
+}
+
+// ---- Canvas drawing ----
+function dpr() { return window.devicePixelRatio || 1; }
+
+function resize() {
+  const r = dpr();
+  const wrap = document.getElementById('canvas-wrap');
+  canvas.width = wrap.clientWidth * r;
+  canvas.height = wrap.clientHeight * r;
+  ctx.setTransform(r, 0, 0, r, 0, 0);
+  render();
+}
+
+window.addEventListener('resize', resize);
+
+const NODE_RADIUS = 22;
+const COLORS = ['#6c7bff', '#34d399', '#f472b6', '#fbbf24', '#22d3ee', '#a78bfa', '#fb923c', '#4ade80'];
+
+function nodeColor(id) {
+  // Assign stable color by component if available
+  if (state.result && state.result.components) {
+    for (let i = 0; i < state.result.components.length; i++) {
+      if (state.result.components[i].includes(id)) return COLORS[i % COLORS.length];
+    }
+  }
+  return '#6c7bff';
+}
+
+function isHighlightedNode(id) {
+  if (!state.result || !state.result.highlightNodes) return false;
+  const idx = state.result.highlightNodes.indexOf(id);
+  if (idx === -1) return false;
+  if (animTimer) return idx < animStep;
+  return true;
+}
+
+function isHighlightedEdge(from, to) {
+  if (!state.result || !state.result.highlightEdges) return false;
+  return state.result.highlightEdges.some(e => e[0] === from && e[1] === to);
+}
+
+function getNodePos(id) {
+  const n = state.nodes.find(n => n.id === id);
+  return n ? { x: n.x, y: n.y } : null;
+}
+
+function render() {
+  const w = canvas.width / dpr();
+  const h = canvas.height / dpr();
+  ctx.clearRect(0, 0, w, h);
+
+  // Draw grid
+  ctx.strokeStyle = '#1a1d27';
+  ctx.lineWidth = 1;
+  const gridSize = 40;
+  for (let x = 0; x < w; x += gridSize) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+  }
+  for (let y = 0; y < h; y += gridSize) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  }
+
+  // Draw edges
+  for (const e of state.edges) {
+    const from = getNodePos(e.from);
+    const to = getNodePos(e.to);
+    if (!from || !to) continue;
+
+    const highlighted = isHighlightedEdge(e.from, e.to);
+    const isSelected = selected && selected.type === 'edge' && selected.from === e.from && selected.to === e.to;
+    const isHovered = hoveredEdge && hoveredEdge.from === e.from && hoveredEdge.to === e.to;
+
+    // Self-loop
+    if (e.from === e.to) {
+      ctx.strokeStyle = highlighted ? '#34d399' : isSelected ? '#fbbf24' : isHovered ? '#8b90ff' : '#3a3f55';
+      ctx.lineWidth = highlighted || isSelected ? 2.5 : 1.5;
+      ctx.beginPath();
+      ctx.arc(from.x, from.y - NODE_RADIUS - 15, 15, 0.3, Math.PI * 2 - 0.3);
+      ctx.stroke();
+      if (state.directed) {
+        drawArrowArc(from.x, from.y - NODE_RADIUS - 15, 15, -0.3, ctx.strokeStyle);
+      }
+      continue;
+    }
+
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist === 0) continue;
+    const ux = dx / dist;
+    const uy = dy / dist;
+
+    const sx = from.x + ux * NODE_RADIUS;
+    const sy = from.y + uy * NODE_RADIUS;
+    const ex = to.x - ux * NODE_RADIUS;
+    const ey = to.y - uy * NODE_RADIUS;
+
+    ctx.strokeStyle = highlighted ? '#34d399' : isSelected ? '#fbbf24' : isHovered ? '#8b90ff' : '#3a3f55';
+    ctx.lineWidth = highlighted || isSelected ? 2.5 : 1.5;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+
+    // Arrow for directed
+    if (state.directed) {
+      const arrowLen = 10;
+      const angle = Math.atan2(ey - sy, ex - sx);
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.beginPath();
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(ex - arrowLen * Math.cos(angle - 0.3), ey - arrowLen * Math.sin(angle - 0.3));
+      ctx.lineTo(ex - arrowLen * Math.cos(angle + 0.3), ey - arrowLen * Math.sin(angle + 0.3));
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Weight label
+    if (e.weight !== 0 && e.weight !== 1) {
+      const mx = (sx + ex) / 2;
+      const my = (sy + ey) / 2;
+      const nx = -uy * 12;
+      const ny = ux * 12;
+      ctx.fillStyle = '#8b90a0';
+      ctx.font = '11px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(e.weight), mx + nx, my + ny);
+    }
+  }
+
+  // Draw edge-creation preview line
+  if (edgeStart) {
+    const from = getNodePos(edgeStart);
+    if (from && mousePos) {
+      ctx.strokeStyle = 'rgba(108, 123, 255, 0.4)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(mousePos.x, mousePos.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  // Draw nodes
+  for (const n of state.nodes) {
+    const highlighted = isHighlightedNode(n.id);
+    const isSelected = selected && selected.type === 'node' && selected.id === n.id;
+    const isEdgeSource = edgeStart === n.id;
+    const isHovered = hoveredNode === n.id;
+    const color = nodeColor(n.id);
+
+    // Glow
+    if (highlighted || isSelected) {
+      const glowColor = highlighted ? 'rgba(52, 211, 153, 0.25)' : 'rgba(251, 191, 36, 0.25)';
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, NODE_RADIUS + 6, 0, Math.PI * 2);
+      ctx.fillStyle = glowColor;
+      ctx.fill();
+    }
+
+    // Node circle
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, NODE_RADIUS, 0, Math.PI * 2);
+    ctx.fillStyle = highlighted ? '#1a3a30' : isSelected ? '#3a3020' : isEdgeSource ? '#1a2040' : '#1a1d27';
+    ctx.fill();
+    ctx.strokeStyle = highlighted ? '#34d399' : isSelected ? '#fbbf24' : isEdgeSource ? '#6c7bff' : isHovered ? '#6c7bff' : '#3a3f55';
+    ctx.lineWidth = highlighted || isSelected || isEdgeSource ? 2.5 : 1.5;
+    ctx.stroke();
+
+    // Step number for animated traversal
+    if (highlighted && state.result && state.result.highlightNodes) {
+      const idx = state.result.highlightNodes.indexOf(n.id);
+      if (idx >= 0) {
+        ctx.fillStyle = '#34d399';
+        ctx.font = 'bold 9px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(idx + 1), n.x + NODE_RADIUS - 4, n.y - NODE_RADIUS + 4);
+      }
+    }
+
+    // Label
+    ctx.fillStyle = highlighted ? '#34d399' : isSelected ? '#fbbf24' : '#e1e4ed';
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(n.label || n.id, n.x, n.y);
+  }
+
+  // Stats
+  ctx.fillStyle = '#4a4f65';
+  ctx.font = '12px -apple-system, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(`${state.nodes.length} nodes · ${state.edges.length} edges`, w - 12, h - 12);
+}
+
+function drawArrowArc(cx, cy, r, endAngle, color) {
+  const ax = cx + r * Math.cos(endAngle);
+  const ay = cy + r * Math.sin(endAngle);
+  const angle = endAngle + Math.PI / 2;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(ax - 8 * Math.cos(angle - 0.4), ay - 8 * Math.sin(angle - 0.4));
+  ctx.lineTo(ax - 8 * Math.cos(angle + 0.4), ay - 8 * Math.sin(angle + 0.4));
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ---- Hit testing ----
+function hitTestNode(x, y) {
+  for (let i = state.nodes.length - 1; i >= 0; i--) {
+    const n = state.nodes[i];
+    const dx = x - n.x, dy = y - n.y;
+    if (dx * dx + dy * dy <= NODE_RADIUS * NODE_RADIUS) return n.id;
+  }
+  return null;
+}
+
+function hitTestEdge(x, y) {
+  const threshold = 8;
+  for (const e of state.edges) {
+    const from = getNodePos(e.from);
+    const to = getNodePos(e.to);
+    if (!from || !to) continue;
+    if (e.from === e.to) continue; // skip self-loops for now
+    const d = distToSegment(x, y, from.x, from.y, to.x, to.y);
+    if (d < threshold) return { from: e.from, to: e.to };
+  }
+  return null;
+}
+
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.sqrt((px - x1) ** 2 + (py - y1) ** 2);
+  let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  const cx = x1 + t * dx, cy = y1 + t * dy;
+  return Math.sqrt((px - cx) ** 2 + (py - cy) ** 2);
+}
+
+// ---- Mouse events ----
+let mousePos = null;
+let lastClick = 0;
+
+function canvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  const pos = canvasCoords(e);
+  const now = Date.now();
+  const nodeId = hitTestNode(pos.x, pos.y);
+
+  // Double click to create node
+  if (now - lastClick < 300 && !nodeId) {
+    addNodeAtPos(pos.x, pos.y);
+    lastClick = 0;
+    return;
+  }
+  lastClick = now;
+
+  if (nodeId) {
+    if (edgeStart && edgeStart !== nodeId) {
+      // Complete edge creation
+      addEdgeAPI(edgeStart, nodeId);
+      edgeStart = null;
+      showMode('');
+      return;
+    }
+    // Start dragging
+    const n = state.nodes.find(n => n.id === nodeId);
+    dragging = { id: nodeId, offsetX: pos.x - n.x, offsetY: pos.y - n.y };
+    selected = { type: 'node', id: nodeId };
+    render();
+  } else {
+    // Check edge
+    const edge = hitTestEdge(pos.x, pos.y);
+    if (edge) {
+      selected = { type: 'edge', ...edge };
+      edgeStart = null;
+      showMode('');
+    } else {
+      selected = null;
+      edgeStart = null;
+      showMode('');
+    }
+    render();
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  const pos = canvasCoords(e);
+  mousePos = pos;
+
+  if (dragging) {
+    const n = state.nodes.find(n => n.id === dragging.id);
+    if (n) {
+      n.x = pos.x - dragging.offsetX;
+      n.y = pos.y - dragging.offsetY;
+      render();
+    }
+    return;
+  }
+
+  // Hover detection
+  const nodeId = hitTestNode(pos.x, pos.y);
+  const edge = nodeId ? null : hitTestEdge(pos.x, pos.y);
+  const changed = hoveredNode !== nodeId || (hoveredEdge?.from !== edge?.from || hoveredEdge?.to !== edge?.to);
+  hoveredNode = nodeId;
+  hoveredEdge = edge;
+
+  if (changed) render();
+
+  // Tooltip
+  if (nodeId) {
+    const n = state.nodes.find(n => n.id === nodeId);
+    const inDeg = state.edges.filter(e => e.to === nodeId).length;
+    const outDeg = state.edges.filter(e => e.from === nodeId).length;
+    tooltip.innerHTML = `<div class="tt-id">${esc(n.id)}</div><div class="tt-detail">In: ${inDeg} Out: ${outDeg}</div>`;
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX - canvas.getBoundingClientRect().left + 14) + 'px';
+    tooltip.style.top = (e.clientY - canvas.getBoundingClientRect().top - 10) + 'px';
+  } else if (edge) {
+    const ed = state.edges.find(x => x.from === edge.from && x.to === edge.to);
+    tooltip.innerHTML = `<div class="tt-id">${esc(edge.from)} → ${esc(edge.to)}</div><div class="tt-detail">Weight: ${ed ? ed.weight : '?'}</div>`;
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX - canvas.getBoundingClientRect().left + 14) + 'px';
+    tooltip.style.top = (e.clientY - canvas.getBoundingClientRect().top - 10) + 'px';
+  } else {
+    tooltip.style.display = 'none';
+  }
+
+  // Redraw edge preview
+  if (edgeStart) render();
+
+  canvas.style.cursor = nodeId ? 'grab' : edge ? 'pointer' : edgeStart ? 'crosshair' : 'default';
+});
+
+canvas.addEventListener('mouseup', () => {
+  if (dragging) {
+    updateNodePos(dragging.id, state.nodes.find(n => n.id === dragging.id).x, state.nodes.find(n => n.id === dragging.id).y);
+    dragging = null;
+  }
+});
+
+canvas.addEventListener('mouseleave', () => {
+  tooltip.style.display = 'none';
+  hoveredNode = null;
+  hoveredEdge = null;
+  mousePos = null;
+  render();
+});
+
+// ---- Keyboard ----
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+
+  if (e.key === 'Escape') {
+    selected = null;
+    edgeStart = null;
+    showMode('');
+    clearResult();
+    render();
+  }
+
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selected) {
+    if (selected.type === 'node') removeNode(selected.id);
+    else if (selected.type === 'edge') removeEdge(selected.from, selected.to);
+    selected = null;
+  }
+
+  // 'e' to start edge mode from selected node
+  if (e.key === 'e' && selected && selected.type === 'node') {
+    edgeStart = selected.id;
+    showMode('Edge mode: click target node');
+    render();
+  }
+});
+
+function showMode(text) {
+  modeEl.textContent = text;
+  modeEl.classList.toggle('visible', !!text);
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// ---- Init ----
+resize();
+fetchGraph();
+
+// Update max nodeCounter based on existing nodes
+function syncNodeCounter() {
+  for (const n of state.nodes) {
+    const m = n.id.match(/^n(\d+)$/);
+    if (m) nodeCounter = Math.max(nodeCounter, parseInt(m[1]));
+  }
+}
+</script>
+</body>
+</html>

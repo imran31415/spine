@@ -1,5 +1,5 @@
 # Binaries
-visualizer
+/visualizer
 *.exe
 *.out
 *.bin
