@@ -316,4 +316,171 @@ var templates = []Template{
 			{From: "review", To: "deploy", Weight: 1},
 		},
 	},
+	{
+		ID:          "codebase",
+		Name:        "Codebase File Tree",
+		Description: "Source file tree with file metadata — try roots, leaves, descendants, ancestors",
+		Directed:    true,
+		Nodes: []templateNode{
+			// Root
+			{ID: "spine", Label: "spine/", X: 450, Y: 30, Meta: map[string]any{
+				"type": "directory", "description": "Root of the spine graph library",
+				"total_files": 20, "language": "Go",
+			}},
+			// Top-level source files
+			{ID: "graph.go", Label: "graph.go", X: 80, Y: 170, Meta: map[string]any{
+				"type": "file", "language": "Go", "lines": 313, "bytes": 7681,
+				"description": "Core graph data structure with generic nodes and edges",
+				"exports":     []any{"Graph[N,E]", "Node[T]", "Edge[T]", "NewGraph", "AddNode", "AddEdge"},
+			}},
+			{ID: "traverse.go", Label: "traverse.go", X: 230, Y: 170, Meta: map[string]any{
+				"type": "file", "language": "Go", "lines": 328, "bytes": 7631,
+				"description": "Graph traversal algorithms",
+				"exports":     []any{"BFS", "DFS", "ShortestPath", "TopologicalSort", "CycleDetect", "ConnectedComponents"},
+			}},
+			{ID: "query.go", Label: "query.go", X: 380, Y: 170, Meta: map[string]any{
+				"type": "file", "language": "Go", "lines": 88, "bytes": 2081,
+				"description": "Query and filter operations on graphs",
+				"exports":     []any{"FilterNodes", "FilterEdges", "Ancestors", "Descendants", "Roots", "Leaves"},
+			}},
+			{ID: "task.go", Label: "task.go", X: 530, Y: 170, Meta: map[string]any{
+				"type": "file", "language": "Go", "lines": 254, "bytes": 5909,
+				"description": "DAG-based task scheduler with concurrency control",
+				"exports":     []any{"TaskGraph[T]", "TaskState", "Execute"},
+			}},
+			{ID: "store.go", Label: "store.go", X: 680, Y: 170, Meta: map[string]any{
+				"type": "file", "language": "Go", "lines": 261, "bytes": 5291,
+				"description": "Metadata key-value store with schema validation",
+				"exports":     []any{"Store", "Schema", "FieldDef", "NewStore", "Set", "Get", "List"},
+			}},
+			{ID: "serialize.go", Label: "serialize.go", X: 830, Y: 170, Meta: map[string]any{
+				"type": "file", "language": "Go", "lines": 275, "bytes": 6787,
+				"description": "JSON serialization and deserialization of graphs",
+				"exports":     []any{"Marshal", "Unmarshal", "Snapshot", "MarshalOptions"},
+			}},
+			// Test files
+			{ID: "graph_test.go", Label: "graph_test.go", X: 80, Y: 320, Meta: map[string]any{
+				"type": "file", "language": "Go", "lines": 206, "bytes": 4497,
+				"description": "Tests for core graph operations",
+				"test_file_for": "graph.go",
+			}},
+			{ID: "traverse_test.go", Label: "traverse_test.go", X: 230, Y: 320, Meta: map[string]any{
+				"type": "file", "language": "Go", "lines": 277, "bytes": 6260,
+				"description": "Tests for traversal algorithms",
+				"test_file_for": "traverse.go",
+			}},
+			{ID: "query_test.go", Label: "query_test.go", X: 380, Y: 320, Meta: map[string]any{
+				"type": "file", "language": "Go", "lines": 144, "bytes": 3078,
+				"description": "Tests for query operations",
+				"test_file_for": "query.go",
+			}},
+			{ID: "task_test.go", Label: "task_test.go", X: 530, Y: 320, Meta: map[string]any{
+				"type": "file", "language": "Go", "lines": 277, "bytes": 6143,
+				"description": "Tests for task scheduler",
+				"test_file_for": "task.go",
+			}},
+			{ID: "store_test.go", Label: "store_test.go", X: 680, Y: 320, Meta: map[string]any{
+				"type": "file", "language": "Go", "lines": 296, "bytes": 6166,
+				"description": "Tests for metadata store",
+				"test_file_for": "store.go",
+			}},
+			{ID: "serialize_test.go", Label: "serialize_test.go", X: 830, Y: 320, Meta: map[string]any{
+				"type": "file", "language": "Go", "lines": 446, "bytes": 11093,
+				"description": "Tests for serialization round-trips",
+				"test_file_for": "serialize.go",
+			}},
+			{ID: "meta_test.go", Label: "meta_test.go", X: 80, Y: 440, Meta: map[string]any{
+				"type": "file", "language": "Go", "lines": 203, "bytes": 4883,
+				"description": "Tests for graph metadata integration",
+			}},
+			// Config/docs
+			{ID: "go.mod", Label: "go.mod", X: 230, Y: 440, Meta: map[string]any{
+				"type": "file", "language": "Go Module", "lines": 3, "bytes": 22,
+				"description": "Go module definition — zero external dependencies",
+				"module": "spine", "go_version": "1.22",
+			}},
+			{ID: "Makefile", Label: "Makefile", X: 380, Y: 440, Meta: map[string]any{
+				"type": "file", "language": "Make", "lines": 9, "bytes": 112,
+				"description": "Build automation: test, visualize, run targets",
+				"targets": []any{"test", "visualize", "run"},
+			}},
+			{ID: "README.md", Label: "README.md", X: 530, Y: 440, Meta: map[string]any{
+				"type": "file", "language": "Markdown", "lines": 99, "bytes": 2552,
+				"description": "Project documentation with usage examples",
+			}},
+			{ID: "doc.go", Label: "doc.go", X: 680, Y: 440, Meta: map[string]any{
+				"type": "file", "language": "Go", "lines": 7, "bytes": 387,
+				"description": "Package-level Go doc comment",
+			}},
+			{ID: ".gitignore", Label: ".gitignore", X: 830, Y: 440, Meta: map[string]any{
+				"type": "file", "lines": 21, "bytes": 156,
+				"description": "Git ignore rules for binaries, coverage, IDE files",
+			}},
+			// cmd directory tree
+			{ID: "cmd", Label: "cmd/", X: 450, Y: 560, Meta: map[string]any{
+				"type": "directory", "description": "Application entry points",
+			}},
+			{ID: "visualizer", Label: "visualizer/", X: 450, Y: 660, Meta: map[string]any{
+				"type": "directory", "description": "Web-based interactive graph visualizer",
+			}},
+			{ID: "main.go", Label: "main.go", X: 280, Y: 770, Meta: map[string]any{
+				"type": "file", "language": "Go", "lines": 908, "bytes": 22060,
+				"description": "HTTP server with REST API for graph manipulation and algorithm execution",
+				"endpoints": 20, "port": 8090,
+			}},
+			{ID: "templates.go", Label: "templates.go", X: 450, Y: 770, Meta: map[string]any{
+				"type": "file", "language": "Go", "lines": 319, "bytes": 12614,
+				"description": "Pre-built graph templates for demo and exploration",
+				"template_count": 8,
+			}},
+			{ID: "static", Label: "static/", X: 620, Y: 770, Meta: map[string]any{
+				"type": "directory", "description": "Embedded static web assets",
+			}},
+			{ID: "index.html", Label: "index.html", X: 620, Y: 880, Meta: map[string]any{
+				"type": "file", "language": "HTML/JS/CSS", "lines": 1982, "bytes": 54469,
+				"description": "Self-contained interactive frontend with canvas rendering",
+				"features": []any{"graph editing", "algorithm visualization", "metadata inspector", "import/export"},
+			}},
+		},
+		Edges: []templateEdge{
+			// Root -> top-level source files
+			{From: "spine", To: "graph.go", Label: "contains", Weight: 1},
+			{From: "spine", To: "traverse.go", Label: "contains", Weight: 1},
+			{From: "spine", To: "query.go", Label: "contains", Weight: 1},
+			{From: "spine", To: "task.go", Label: "contains", Weight: 1},
+			{From: "spine", To: "store.go", Label: "contains", Weight: 1},
+			{From: "spine", To: "serialize.go", Label: "contains", Weight: 1},
+			// Root -> test files
+			{From: "spine", To: "graph_test.go", Label: "contains", Weight: 1},
+			{From: "spine", To: "traverse_test.go", Label: "contains", Weight: 1},
+			{From: "spine", To: "query_test.go", Label: "contains", Weight: 1},
+			{From: "spine", To: "task_test.go", Label: "contains", Weight: 1},
+			{From: "spine", To: "store_test.go", Label: "contains", Weight: 1},
+			{From: "spine", To: "serialize_test.go", Label: "contains", Weight: 1},
+			{From: "spine", To: "meta_test.go", Label: "contains", Weight: 1},
+			// Root -> config/docs
+			{From: "spine", To: "go.mod", Label: "contains", Weight: 1},
+			{From: "spine", To: "Makefile", Label: "contains", Weight: 1},
+			{From: "spine", To: "README.md", Label: "contains", Weight: 1},
+			{From: "spine", To: "doc.go", Label: "contains", Weight: 1},
+			{From: "spine", To: ".gitignore", Label: "contains", Weight: 1},
+			// Root -> cmd directory
+			{From: "spine", To: "cmd", Label: "contains", Weight: 1},
+			// cmd -> visualizer
+			{From: "cmd", To: "visualizer", Label: "contains", Weight: 1},
+			// visualizer -> its files
+			{From: "visualizer", To: "main.go", Label: "contains", Weight: 1},
+			{From: "visualizer", To: "templates.go", Label: "contains", Weight: 1},
+			{From: "visualizer", To: "static", Label: "contains", Weight: 1},
+			// static -> index.html
+			{From: "static", To: "index.html", Label: "contains", Weight: 1},
+			// Source-to-test relationships
+			{From: "graph.go", To: "graph_test.go", Label: "tested by", Weight: 1},
+			{From: "traverse.go", To: "traverse_test.go", Label: "tested by", Weight: 1},
+			{From: "query.go", To: "query_test.go", Label: "tested by", Weight: 1},
+			{From: "task.go", To: "task_test.go", Label: "tested by", Weight: 1},
+			{From: "store.go", To: "store_test.go", Label: "tested by", Weight: 1},
+			{From: "serialize.go", To: "serialize_test.go", Label: "tested by", Weight: 1},
+		},
+	},
 }
