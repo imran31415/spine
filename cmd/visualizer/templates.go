@@ -11,11 +11,12 @@ type Template struct {
 }
 
 type templateNode struct {
-	ID     string  `json:"id"`
-	Label  string  `json:"label"`
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
-	Status string  `json:"status,omitempty"`
+	ID     string         `json:"id"`
+	Label  string         `json:"label"`
+	X      float64        `json:"x"`
+	Y      float64        `json:"y"`
+	Status string         `json:"status,omitempty"`
+	Meta   map[string]any `json:"meta,omitempty"`
 }
 
 type templateEdge struct {
@@ -53,15 +54,29 @@ var templates = []Template{
 		Description: "Fan-out/fan-in DAG — try topo sort, roots, and leaves",
 		Directed:    true,
 		Nodes: []templateNode{
-			{ID: "push", Label: "Push", X: 450, Y: 50},
-			{ID: "lint", Label: "Lint", X: 200, Y: 180},
-			{ID: "test", Label: "Test", X: 450, Y: 180},
-			{ID: "build", Label: "Build", X: 700, Y: 180},
-			{ID: "scan", Label: "Security Scan", X: 200, Y: 330},
+			{ID: "push", Label: "Push", X: 450, Y: 50, Meta: map[string]any{
+				"trigger": "on_push", "branch": "main",
+			}},
+			{ID: "lint", Label: "Lint", X: 200, Y: 180, Meta: map[string]any{
+				"tool": "golangci-lint", "config": ".golangci.yml",
+			}},
+			{ID: "test", Label: "Test", X: 450, Y: 180, Meta: map[string]any{
+				"framework": "go test", "flags": "-race -v", "min_coverage": "80%",
+			}},
+			{ID: "build", Label: "Build", X: 700, Y: 180, Meta: map[string]any{
+				"output": "./bin/app", "os": "linux", "arch": "amd64",
+			}},
+			{ID: "scan", Label: "Security Scan", X: 200, Y: 330, Meta: map[string]any{
+				"tool": "gosec", "severity": "high",
+			}},
 			{ID: "coverage", Label: "Coverage", X: 450, Y: 330},
-			{ID: "docker", Label: "Docker", X: 700, Y: 330},
+			{ID: "docker", Label: "Docker", X: 700, Y: 330, Meta: map[string]any{
+				"base_image": "golang:1.22-alpine", "registry": "ghcr.io", "tag": "latest",
+			}},
 			{ID: "staging", Label: "Staging", X: 450, Y: 480},
-			{ID: "deploy", Label: "Deploy", X: 450, Y: 620},
+			{ID: "deploy", Label: "Deploy", X: 450, Y: 620, Meta: map[string]any{
+				"environment": "production", "region": "us-east-1", "replicas": 3,
+			}},
 		},
 		Edges: []templateEdge{
 			{From: "push", To: "lint", Weight: 1},
@@ -82,16 +97,28 @@ var templates = []Template{
 		Description: "Undirected concept map — try BFS, DFS, and components",
 		Directed:    false,
 		Nodes: []templateNode{
-			{ID: "ml", Label: "Machine Learning", X: 450, Y: 60},
-			{ID: "nn", Label: "Neural Nets", X: 250, Y: 180},
+			{ID: "ml", Label: "Machine Learning", X: 450, Y: 60, Meta: map[string]any{
+				"field": "Computer Science", "since": 1959,
+			}},
+			{ID: "nn", Label: "Neural Nets", X: 250, Y: 180, Meta: map[string]any{
+				"inspired_by": "biological neurons", "key_paper": "Perceptrons (1969)",
+			}},
 			{ID: "dl", Label: "Deep Learning", X: 100, Y: 330},
-			{ID: "cnn", Label: "CNN", X: 250, Y: 450},
-			{ID: "nlp", Label: "NLP", X: 450, Y: 200},
-			{ID: "transformers", Label: "Transformers", X: 450, Y: 370},
+			{ID: "cnn", Label: "CNN", X: 250, Y: 450, Meta: map[string]any{
+				"use_case": "image recognition", "key_paper": "ImageNet (2012)",
+			}},
+			{ID: "nlp", Label: "NLP", X: 450, Y: 200, Meta: map[string]any{
+				"applications": []any{"translation", "summarization", "chat"},
+			}},
+			{ID: "transformers", Label: "Transformers", X: 450, Y: 370, Meta: map[string]any{
+				"key_paper": "Attention Is All You Need", "year": 2017, "authors": "Vaswani et al.",
+			}},
 			{ID: "stats", Label: "Statistics", X: 700, Y: 100},
 			{ID: "regression", Label: "Regression", X: 800, Y: 250},
 			{ID: "pca", Label: "PCA", X: 700, Y: 400},
-			{ID: "rl", Label: "Reinforcement", X: 600, Y: 550},
+			{ID: "rl", Label: "Reinforcement", X: 600, Y: 550, Meta: map[string]any{
+				"applications": []any{"game AI", "robotics", "resource management"},
+			}},
 		},
 		Edges: []templateEdge{
 			{From: "ml", To: "nn", Weight: 1},
@@ -207,16 +234,26 @@ var templates = []Template{
 		Description: "Weighted edges (latency in ms) — try shortest path",
 		Directed:    true,
 		Nodes: []templateNode{
-			{ID: "gateway", Label: "Gateway", X: 450, Y: 50},
-			{ID: "auth", Label: "Auth", X: 200, Y: 180},
+			{ID: "gateway", Label: "Gateway", X: 450, Y: 50, Meta: map[string]any{
+				"port": 8080, "rate_limit": "1000/min", "timeout_ms": 30000,
+			}},
+			{ID: "auth", Label: "Auth", X: 200, Y: 180, Meta: map[string]any{
+				"strategy": "JWT", "token_ttl": "1h", "issuer": "auth-service",
+			}},
 			{ID: "users", Label: "Users", X: 450, Y: 180},
 			{ID: "orders", Label: "Orders", X: 700, Y: 180},
 			{ID: "products", Label: "Products", X: 200, Y: 350},
 			{ID: "payments", Label: "Payments", X: 450, Y: 350},
 			{ID: "inventory", Label: "Inventory", X: 700, Y: 350},
-			{ID: "notify", Label: "Notify", X: 300, Y: 520},
-			{ID: "cache", Label: "Cache", X: 550, Y: 520},
-			{ID: "db", Label: "Database", X: 700, Y: 520},
+			{ID: "notify", Label: "Notify", X: 300, Y: 520, Meta: map[string]any{
+				"channels": []any{"email", "slack", "webhook"}, "retry_count": 3,
+			}},
+			{ID: "cache", Label: "Cache", X: 550, Y: 520, Meta: map[string]any{
+				"engine": "Redis", "ttl_seconds": 300, "max_memory": "256mb",
+			}},
+			{ID: "db", Label: "Database", X: 700, Y: 520, Meta: map[string]any{
+				"engine": "PostgreSQL", "version": "15", "pool_size": 20,
+			}},
 		},
 		Edges: []templateEdge{
 			{From: "gateway", To: "auth", Weight: 5},
@@ -237,17 +274,36 @@ var templates = []Template{
 	{
 		ID:          "taskplan",
 		Name:        "LLM Task Plan",
-		Description: "Task execution plan with statuses — watch auto-ready promotion",
+		Description: "Task execution plan with statuses and metadata — click nodes to inspect",
 		Directed:    true,
 		Nodes: []templateNode{
-			{ID: "analyze", Label: "Analyze", X: 450, Y: 50, Status: "done"},
-			{ID: "plan", Label: "Plan", X: 450, Y: 180, Status: "done"},
-			{ID: "research", Label: "Research", X: 250, Y: 320, Status: "running"},
-			{ID: "setup", Label: "Setup", X: 650, Y: 320, Status: "done"},
-			{ID: "implement", Label: "Implement", X: 450, Y: 460, Status: "ready"},
-			{ID: "test", Label: "Test", X: 450, Y: 590, Status: "pending"},
-			{ID: "review", Label: "Review", X: 450, Y: 720, Status: "pending"},
-			{ID: "deploy", Label: "Deploy", X: 450, Y: 850, Status: "pending"},
+			{ID: "analyze", Label: "Analyze", X: 450, Y: 50, Status: "done", Meta: map[string]any{
+				"prompt": "Analyze the codebase structure and identify key components",
+				"model":  "claude-opus-4-6", "temperature": 0.3, "output_format": "structured_json",
+			}},
+			{ID: "plan", Label: "Plan", X: 450, Y: 180, Status: "done", Meta: map[string]any{
+				"strategy": "top-down decomposition", "max_tasks": 8, "priority": "correctness",
+			}},
+			{ID: "research", Label: "Research", X: 250, Y: 320, Status: "running", Meta: map[string]any{
+				"sources": []any{"documentation", "source code", "tests"},
+				"depth":   "comprehensive", "query": "graph metadata systems",
+			}},
+			{ID: "setup", Label: "Setup", X: 650, Y: 320, Status: "done", Meta: map[string]any{
+				"runtime": "go1.22", "environment": "development",
+			}},
+			{ID: "implement", Label: "Implement", X: 450, Y: 460, Status: "ready", Meta: map[string]any{
+				"language": "Go", "pattern": "method receiver",
+				"files": []any{"store.go", "graph.go"},
+			}},
+			{ID: "test", Label: "Test", X: 450, Y: 590, Status: "pending", Meta: map[string]any{
+				"framework": "testing", "coverage_target": "90%", "race_detector": true,
+			}},
+			{ID: "review", Label: "Review", X: 450, Y: 720, Status: "pending", Meta: map[string]any{
+				"checklist": []any{"correctness", "edge cases", "documentation"},
+			}},
+			{ID: "deploy", Label: "Deploy", X: 450, Y: 850, Status: "pending", Meta: map[string]any{
+				"target": "production", "strategy": "blue-green", "rollback_plan": true,
+			}},
 		},
 		Edges: []templateEdge{
 			{From: "analyze", To: "plan", Weight: 1},

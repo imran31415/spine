@@ -267,6 +267,22 @@ func Subgraph[N, E any](g *Graph[N, E], ids []string) *Graph[N, E] {
 			}
 		}
 	}
+	// Copy metadata stores for included nodes and edges.
+	for _, id := range ids {
+		if store, ok := g.nodeMeta[id]; ok {
+			sub.nodeMeta[id] = store.Copy()
+		}
+	}
+	for from, m := range g.edgeMeta {
+		for to, store := range m {
+			if idSet[from] && idSet[to] && sub.HasEdge(from, to) {
+				if sub.edgeMeta[from] == nil {
+					sub.edgeMeta[from] = make(map[string]*Store)
+				}
+				sub.edgeMeta[from][to] = store.Copy()
+			}
+		}
+	}
 	return sub
 }
 

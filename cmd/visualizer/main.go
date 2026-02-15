@@ -81,35 +81,51 @@ type graphResp struct {
 }
 
 type nodeResp struct {
-	ID     string  `json:"id"`
-	Label  string  `json:"label"`
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
-	Status string  `json:"status,omitempty"`
+	ID        string  `json:"id"`
+	Label     string  `json:"label"`
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	Status    string  `json:"status,omitempty"`
+	MetaCount int     `json:"metaCount,omitempty"`
 }
 
 type edgeResp struct {
-	From   string  `json:"from"`
-	To     string  `json:"to"`
-	Label  string  `json:"label"`
-	Weight float64 `json:"weight"`
+	From      string  `json:"from"`
+	To        string  `json:"to"`
+	Label     string  `json:"label"`
+	Weight    float64 `json:"weight"`
+	MetaCount int     `json:"metaCount,omitempty"`
 }
 
 type algoResultResp struct {
-	Algorithm      string     `json:"algorithm"`
-	VisitedOrder   []string   `json:"visitedOrder,omitempty"`
-	Path           []string   `json:"path,omitempty"`
-	Cost           float64    `json:"cost,omitempty"`
-	HasCycle       bool       `json:"hasCycle,omitempty"`
-	Cycle          []string   `json:"cycle,omitempty"`
-	Components     [][]string `json:"components,omitempty"`
-	Roots          []string   `json:"roots,omitempty"`
-	Leaves         []string   `json:"leaves,omitempty"`
-	Ancestors      []string   `json:"ancestors,omitempty"`
-	Descendants    []string   `json:"descendants,omitempty"`
-	HighlightNodes []string   `json:"highlightNodes,omitempty"`
+	Algorithm      string      `json:"algorithm"`
+	VisitedOrder   []string    `json:"visitedOrder,omitempty"`
+	Path           []string    `json:"path,omitempty"`
+	Cost           float64     `json:"cost,omitempty"`
+	HasCycle       bool        `json:"hasCycle,omitempty"`
+	Cycle          []string    `json:"cycle,omitempty"`
+	Components     [][]string  `json:"components,omitempty"`
+	Roots          []string    `json:"roots,omitempty"`
+	Leaves         []string    `json:"leaves,omitempty"`
+	Ancestors      []string    `json:"ancestors,omitempty"`
+	Descendants    []string    `json:"descendants,omitempty"`
+	HighlightNodes []string    `json:"highlightNodes,omitempty"`
 	HighlightEdges [][2]string `json:"highlightEdges,omitempty"`
-	Error          string     `json:"error,omitempty"`
+	Error          string      `json:"error,omitempty"`
+}
+
+// Metadata API types
+
+type metaResp struct {
+	Items   []metaEntry `json:"items"`
+	Total   int         `json:"total"`
+	Offset  int         `json:"offset"`
+	HasMore bool        `json:"hasMore"`
+}
+
+type metaEntry struct {
+	Key   string `json:"key"`
+	Value any    `json:"value"`
 }
 
 func newServer(directed bool) *server {
@@ -124,12 +140,25 @@ func (s *server) buildGraphResp(result *algoResultResp) graphResp {
 	nr := make([]nodeResp, len(nodes))
 	for i, n := range nodes {
 		pos := s.positions[n.ID]
-		nr[i] = nodeResp{ID: n.ID, Label: n.Data.Label, X: pos.X, Y: pos.Y, Status: n.Data.Status}
+		nr[i] = nodeResp{
+			ID:        n.ID,
+			Label:     n.Data.Label,
+			X:         pos.X,
+			Y:         pos.Y,
+			Status:    n.Data.Status,
+			MetaCount: s.graph.NodeMetaCount(n.ID),
+		}
 	}
 	edges := s.graph.Edges()
 	er := make([]edgeResp, len(edges))
 	for i, e := range edges {
-		er[i] = edgeResp{From: e.From, To: e.To, Label: e.Data.Label, Weight: e.Weight}
+		er[i] = edgeResp{
+			From:      e.From,
+			To:        e.To,
+			Label:     e.Data.Label,
+			Weight:    e.Weight,
+			MetaCount: s.graph.EdgeMetaCount(e.From, e.To),
+		}
 	}
 	return graphResp{
 		Directed: s.graph.Directed,
@@ -232,7 +261,7 @@ func (s *server) handleSetDirected(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// Rebuild the graph with the new mode, keeping all nodes and edges.
+	// Rebuild the graph with the new mode, keeping all nodes, edges, and metadata.
 	old := s.graph
 	s.graph = spine.NewGraph[NodeData, EdgeData](req.Directed)
 	for _, n := range old.Nodes() {
@@ -240,6 +269,27 @@ func (s *server) handleSetDirected(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, e := range old.Edges() {
 		s.graph.AddEdge(e.From, e.To, e.Data, e.Weight)
+	}
+	// Preserve metadata
+	for _, n := range old.Nodes() {
+		if old.NodeMetaCount(n.ID) > 0 {
+			src := old.NodeMeta(n.ID)
+			dst := s.graph.NodeMeta(n.ID)
+			src.Range(func(k string, v any) bool {
+				dst.Set(k, v)
+				return true
+			})
+		}
+	}
+	for _, e := range old.Edges() {
+		if old.EdgeMetaCount(e.From, e.To) > 0 {
+			src := old.EdgeMeta(e.From, e.To)
+			dst := s.graph.EdgeMeta(e.From, e.To)
+			src.Range(func(k string, v any) bool {
+				dst.Set(k, v)
+				return true
+			})
+		}
 	}
 	writeJSON(w, s.buildGraphResp(nil))
 }
@@ -405,6 +455,12 @@ func (s *server) handleLoadTemplate(w http.ResponseWriter, r *http.Request) {
 	for _, n := range tmpl.Nodes {
 		s.graph.AddNode(n.ID, NodeData{Label: n.Label, Status: n.Status})
 		s.positions[n.ID] = Position{X: n.X, Y: n.Y}
+		if len(n.Meta) > 0 {
+			store := s.graph.NodeMeta(n.ID)
+			for k, v := range n.Meta {
+				store.Set(k, v)
+			}
+		}
 	}
 	for _, e := range tmpl.Edges {
 		s.graph.AddEdge(e.From, e.To, EdgeData{Label: e.Label}, e.Weight)
@@ -584,6 +640,225 @@ func (s *server) handleClear(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.buildGraphResp(nil))
 }
 
+// ---- Export / Import handlers ----
+
+func (s *server) handleExport(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	snapBytes, err := spine.Marshal(s.graph, nil)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	var snapshot any
+	if err := json.Unmarshal(snapBytes, &snapshot); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	wrapper := map[string]any{
+		"positions": s.positions,
+		"snapshot":  snapshot,
+	}
+
+	out, err := json.MarshalIndent(wrapper, "", "  ")
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(out)
+}
+
+func (s *server) handleImport(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Positions map[string]Position `json:"positions"`
+		Snapshot  json.RawMessage     `json:"snapshot"`
+	}
+	if err := readJSON(r, &payload); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	g, err := spine.Unmarshal[NodeData, EdgeData](payload.Snapshot)
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.graph = g
+	s.positions = make(map[string]Position)
+
+	// Apply imported positions; grid-layout any nodes that are missing.
+	col := 0
+	for _, n := range s.graph.Nodes() {
+		if pos, ok := payload.Positions[n.ID]; ok {
+			s.positions[n.ID] = pos
+		} else {
+			s.positions[n.ID] = Position{
+				X: 150 + float64(col%5)*200,
+				Y: 80 + float64(col/5)*150,
+			}
+			col++
+		}
+	}
+
+	writeJSON(w, s.buildGraphResp(nil))
+}
+
+// ---- Metadata API handlers ----
+
+func (s *server) handleNodeMeta(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID     string `json:"id"`
+		Offset int    `json:"offset"`
+		Limit  int    `json:"limit"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.graph.HasNode(req.ID) {
+		http.Error(w, "node not found", 404)
+		return
+	}
+	store := s.graph.NodeMeta(req.ID)
+	if req.Limit <= 0 {
+		req.Limit = 50
+	}
+	page := store.List(req.Offset, req.Limit)
+	items := make([]metaEntry, len(page.Items))
+	for i, e := range page.Items {
+		items[i] = metaEntry{Key: e.Key, Value: e.Value}
+	}
+	writeJSON(w, metaResp{Items: items, Total: page.Total, Offset: page.Offset, HasMore: page.HasMore})
+}
+
+func (s *server) handleNodeMetaSet(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID    string `json:"id"`
+		Key   string `json:"key"`
+		Value any    `json:"value"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	if req.Key == "" {
+		http.Error(w, "key is required", 400)
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.graph.HasNode(req.ID) {
+		http.Error(w, "node not found", 404)
+		return
+	}
+	s.graph.NodeMeta(req.ID).Set(req.Key, req.Value)
+	writeJSON(w, s.buildGraphResp(nil))
+}
+
+func (s *server) handleNodeMetaDelete(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID  string `json:"id"`
+		Key string `json:"key"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.graph.HasNode(req.ID) {
+		http.Error(w, "node not found", 404)
+		return
+	}
+	s.graph.NodeMeta(req.ID).Delete(req.Key)
+	writeJSON(w, s.buildGraphResp(nil))
+}
+
+func (s *server) handleEdgeMeta(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		From   string `json:"from"`
+		To     string `json:"to"`
+		Offset int    `json:"offset"`
+		Limit  int    `json:"limit"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.graph.HasEdge(req.From, req.To) {
+		http.Error(w, "edge not found", 404)
+		return
+	}
+	store := s.graph.EdgeMeta(req.From, req.To)
+	if req.Limit <= 0 {
+		req.Limit = 50
+	}
+	page := store.List(req.Offset, req.Limit)
+	items := make([]metaEntry, len(page.Items))
+	for i, e := range page.Items {
+		items[i] = metaEntry{Key: e.Key, Value: e.Value}
+	}
+	writeJSON(w, metaResp{Items: items, Total: page.Total, Offset: page.Offset, HasMore: page.HasMore})
+}
+
+func (s *server) handleEdgeMetaSet(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		From  string `json:"from"`
+		To    string `json:"to"`
+		Key   string `json:"key"`
+		Value any    `json:"value"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	if req.Key == "" {
+		http.Error(w, "key is required", 400)
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.graph.HasEdge(req.From, req.To) {
+		http.Error(w, "edge not found", 404)
+		return
+	}
+	s.graph.EdgeMeta(req.From, req.To).Set(req.Key, req.Value)
+	writeJSON(w, s.buildGraphResp(nil))
+}
+
+func (s *server) handleEdgeMetaDelete(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+		Key  string `json:"key"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.graph.HasEdge(req.From, req.To) {
+		http.Error(w, "edge not found", 404)
+		return
+	}
+	s.graph.EdgeMeta(req.From, req.To).Delete(req.Key)
+	writeJSON(w, s.buildGraphResp(nil))
+}
+
 func main() {
 	s := newServer(true)
 
@@ -614,6 +889,18 @@ func main() {
 	mux.HandleFunc("/api/algo", s.handleAlgo)
 	mux.HandleFunc("/api/node/status", s.handleUpdateNodeStatus)
 	mux.HandleFunc("/api/plan/load", s.handleLoadPlan)
+
+	// Export/Import API routes.
+	mux.HandleFunc("/api/graph/export", s.handleExport)
+	mux.HandleFunc("/api/graph/import", s.handleImport)
+
+	// Metadata API routes.
+	mux.HandleFunc("/api/node/meta", s.handleNodeMeta)
+	mux.HandleFunc("/api/node/meta/set", s.handleNodeMetaSet)
+	mux.HandleFunc("/api/node/meta/delete", s.handleNodeMetaDelete)
+	mux.HandleFunc("/api/edge/meta", s.handleEdgeMeta)
+	mux.HandleFunc("/api/edge/meta/set", s.handleEdgeMetaSet)
+	mux.HandleFunc("/api/edge/meta/delete", s.handleEdgeMetaDelete)
 
 	addr := ":8090"
 	fmt.Printf("Spine visualizer running at http://localhost%s\n", addr)

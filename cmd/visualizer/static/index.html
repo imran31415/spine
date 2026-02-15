@@ -16,9 +16,6 @@
   --accent2: #4a56d6;
   --green: #34d399;
   --red: #f87171;
-  --orange: #fbbf24;
-  --cyan: #22d3ee;
-  --pink: #f472b6;
   --radius: 8px;
 }
 
@@ -132,6 +129,9 @@ button.danger:hover {
   border-color: var(--red);
 }
 
+.full-width { width: 100%; }
+.btn-sm { font-size: 11px; padding: 2px 8px; }
+
 .toggle-row {
   display: flex;
   align-items: center;
@@ -194,6 +194,15 @@ button.danger:hover {
   font-size: 12px;
   padding: 6px 4px;
   text-align: center;
+}
+
+/* Template description */
+#template-desc {
+  font-size: 12px;
+  color: var(--text2);
+  margin: 6px 0;
+  min-height: 18px;
+  line-height: 1.4;
 }
 
 /* Result panel */
@@ -310,6 +319,7 @@ canvas {
 
 .progress-fill {
   height: 100%;
+  width: 0;
   background: var(--green);
   border-radius: 3px;
   transition: width 0.3s;
@@ -345,6 +355,17 @@ canvas {
   display: inline-block;
 }
 
+/* Task section */
+#task-section { display: none; }
+#task-section.visible { display: block; }
+
+#task-node-controls { display: none; margin-top: 8px; }
+#task-node-controls.visible { display: block; }
+
+.task-selected-label { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+#task-node-label { color: var(--text); font-weight: 500; }
+#reset-all-btn { margin-top: 8px; }
+
 /* Status legend overlay */
 #status-legend {
   display: none;
@@ -377,10 +398,114 @@ canvas {
   border: 2px solid;
 }
 
-/* Animation keyframes for result highlights */
-@keyframes pulse-node {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+/* ---- Metadata section ---- */
+#meta-section { display: none; }
+
+.meta-target-label {
+  font-size: 12px;
+  color: var(--text2);
+  margin-bottom: 8px;
+}
+
+.meta-target-label strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.meta-entry {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+}
+
+.meta-entry-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.meta-key {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--accent);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta-type {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--border);
+  color: var(--text2);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  flex-shrink: 0;
+}
+
+.meta-del-btn {
+  background: none;
+  border: none;
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.meta-del-btn:hover {
+  color: var(--red);
+  background: none;
+  border: none;
+}
+
+.meta-value {
+  font-size: 12px;
+  color: var(--text2);
+  word-break: break-all;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  line-height: 1.4;
+}
+
+.meta-empty {
+  font-size: 12px;
+  color: var(--text2);
+  padding: 8px 0;
+  text-align: center;
+}
+
+.meta-pagination {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 6px 0;
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.meta-pagination button {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.meta-pagination button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.meta-add-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text2);
+  margin: 8px 0 6px;
 }
 
 /* Mobile: hamburger toggle (hidden on desktop) */
@@ -468,16 +593,25 @@ canvas {
         <span class="slider"></span>
       </label>
     </div>
-    <button class="danger" style="width:100%" onclick="clearGraph()">Clear Graph</button>
+    <button class="danger full-width" id="clear-graph-btn">Clear Graph</button>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Import / Export</div>
+    <div class="row">
+      <button class="primary" id="export-btn" style="flex:1">Export JSON</button>
+      <button id="import-btn" style="flex:1">Import JSON</button>
+    </div>
+    <input type="file" id="import-file" accept=".json" style="display:none">
   </div>
 
   <div class="section">
     <div class="section-title">Templates</div>
-    <select id="template-select" onchange="onTemplateSelect()">
+    <select id="template-select">
       <option value="">Load a template...</option>
     </select>
-    <div id="template-desc" style="font-size:12px;color:var(--text2);margin:6px 0;min-height:18px;line-height:1.4"></div>
-    <button class="primary" style="width:100%" id="load-template-btn" onclick="loadTemplate()" disabled>Load Template</button>
+    <div id="template-desc"></div>
+    <button class="primary full-width" id="load-template-btn" disabled>Load Template</button>
   </div>
 
   <div class="section">
@@ -486,7 +620,7 @@ canvas {
       <input id="node-id" placeholder="Node ID">
       <input id="node-label" placeholder="Label (opt)">
     </div>
-    <button class="primary" style="width:100%" onclick="addNodeFromForm()">Add Node</button>
+    <button class="primary full-width" id="add-node-btn">Add Node</button>
   </div>
 
   <div class="section">
@@ -498,16 +632,16 @@ canvas {
     <div class="row">
       <input id="edge-weight" placeholder="Weight" type="number" value="1" step="any">
     </div>
-    <button class="primary" style="width:100%" onclick="addEdgeFromForm()">Add Edge</button>
+    <button class="primary full-width" id="add-edge-btn">Add Edge</button>
   </div>
 
-  <div class="section" id="task-section" style="display:none">
+  <div class="section" id="task-section">
     <div class="section-title">Task Status</div>
     <div class="progress-stats"><span class="done-count" id="task-done-count">0/0</span> done — <span id="task-pct">0</span>%</div>
-    <div class="progress-bar"><div class="progress-fill" id="task-progress" style="width:0%"></div></div>
+    <div class="progress-bar"><div class="progress-fill" id="task-progress"></div></div>
     <div class="status-counts" id="task-status-counts"></div>
-    <div id="task-node-controls" style="display:none;margin-top:8px">
-      <div style="font-size:12px;color:var(--text2);margin-bottom:4px">Selected: <span id="task-node-label" style="color:var(--text);font-weight:500"></span></div>
+    <div id="task-node-controls">
+      <div class="task-selected-label">Selected: <span id="task-node-label"></span></div>
       <div class="row">
         <select id="task-status-select">
           <option value="pending">Pending</option>
@@ -517,10 +651,27 @@ canvas {
           <option value="failed">Failed</option>
           <option value="skipped">Skipped</option>
         </select>
-        <button class="primary" onclick="updateNodeStatus()">Update</button>
+        <button class="primary" id="update-status-btn">Update</button>
       </div>
     </div>
-    <button class="danger" style="width:100%;margin-top:8px" onclick="resetAllStatuses()">Reset All</button>
+    <button class="danger full-width" id="reset-all-btn">Reset All</button>
+  </div>
+
+  <div class="section" id="meta-section">
+    <div class="section-title">Metadata</div>
+    <div class="meta-target-label" id="meta-target-label"></div>
+    <div id="meta-entries"></div>
+    <div class="meta-pagination" id="meta-pagination">
+      <button id="meta-prev-btn">&laquo; Prev</button>
+      <span id="meta-page-info">1 / 1</span>
+      <button id="meta-next-btn">Next &raquo;</button>
+    </div>
+    <div class="meta-add-title">Add Entry</div>
+    <div class="row">
+      <input id="meta-key" placeholder="Key">
+      <input id="meta-value" placeholder="Value">
+    </div>
+    <button class="primary full-width" id="meta-add-btn">Add</button>
   </div>
 
   <div class="section">
@@ -530,23 +681,23 @@ canvas {
       <input id="algo-end" placeholder="End node">
     </div>
     <div class="algo-grid">
-      <button onclick="runAlgo('bfs')">BFS</button>
-      <button onclick="runAlgo('dfs')">DFS</button>
-      <button onclick="runAlgo('shortest-path')">Shortest Path</button>
-      <button onclick="runAlgo('topo-sort')">Topo Sort</button>
-      <button onclick="runAlgo('cycle-detect')">Cycle Detect</button>
-      <button onclick="runAlgo('components')">Components</button>
-      <button onclick="runAlgo('roots')">Roots</button>
-      <button onclick="runAlgo('leaves')">Leaves</button>
-      <button onclick="runAlgo('ancestors')">Ancestors</button>
-      <button onclick="runAlgo('descendants')">Descendants</button>
+      <button data-algo="bfs">BFS</button>
+      <button data-algo="dfs">DFS</button>
+      <button data-algo="shortest-path">Shortest Path</button>
+      <button data-algo="topo-sort">Topo Sort</button>
+      <button data-algo="cycle-detect">Cycle Detect</button>
+      <button data-algo="components">Components</button>
+      <button data-algo="roots">Roots</button>
+      <button data-algo="leaves">Leaves</button>
+      <button data-algo="ancestors">Ancestors</button>
+      <button data-algo="descendants">Descendants</button>
     </div>
   </div>
 
   <div id="result-panel">
     <div class="result-header">
       <span class="result-title" id="result-title">Result</span>
-      <button style="font-size:11px;padding:2px 8px" onclick="clearResult()">Clear</button>
+      <button class="btn-sm" id="clear-result-btn">Clear</button>
     </div>
     <div id="result-content"></div>
   </div>
@@ -583,7 +734,7 @@ canvas {
 </div>
 
 <script>
-// ---- State ----
+// ---- Constants & State ----
 let state = { directed: true, nodes: [], edges: [], result: null };
 let selected = null;       // { type: 'node'|'edge', id, from?, to? }
 let edgeStart = null;      // node id when creating edge via click
@@ -594,12 +745,142 @@ let animStep = 0;          // for animated result highlighting
 let animTimer = null;
 let nodeCounter = 0;
 
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-const tooltip = document.getElementById('tooltip');
-const modeEl = document.getElementById('mode-indicator');
+const NODE_RADIUS = 22;
+const COLORS = ['#6c7bff', '#34d399', '#f472b6', '#fbbf24', '#22d3ee', '#a78bfa', '#fb923c', '#4ade80'];
 
-// ---- API helpers ----
+const STATUS_COLORS = {
+  pending:  { fill: '#1a1d27', border: '#4a4f65' },
+  ready:    { fill: '#1a1d40', border: '#6c7bff' },
+  running:  { fill: '#3a3020', border: '#fbbf24' },
+  done:     { fill: '#1a3a30', border: '#34d399' },
+  failed:   { fill: '#3a1a1a', border: '#f87171' },
+  skipped:  { fill: '#1a1d27', border: '#8b90a0' },
+};
+
+const TOUCH_NODE_RADIUS = 30;
+const TOUCH_EDGE_THRESHOLD = 16;
+
+// ---- Metadata state ----
+let metaState = { items: [], total: 0, offset: 0, hasMore: false };
+const META_PAGE_SIZE = 5;
+
+// ---- DOM Refs ----
+const $ = id => document.getElementById(id);
+const dom = {
+  canvas: $('canvas'),
+  canvasWrap: $('canvas-wrap'),
+  tooltip: $('tooltip'),
+  modeEl: $('mode-indicator'),
+  sidebar: $('sidebar'),
+  sidebarOverlay: $('sidebar-overlay'),
+  menuToggle: $('menu-toggle'),
+  statusLegend: $('status-legend'),
+  directedToggle: $('directed-toggle'),
+  nodeId: $('node-id'),
+  nodeLabel: $('node-label'),
+  edgeFrom: $('edge-from'),
+  edgeTo: $('edge-to'),
+  edgeWeight: $('edge-weight'),
+  algoStart: $('algo-start'),
+  algoEnd: $('algo-end'),
+  templateSelect: $('template-select'),
+  templateDesc: $('template-desc'),
+  loadTemplateBtn: $('load-template-btn'),
+  resultPanel: $('result-panel'),
+  resultTitle: $('result-title'),
+  resultContent: $('result-content'),
+  taskSection: $('task-section'),
+  taskDoneCount: $('task-done-count'),
+  taskPct: $('task-pct'),
+  taskProgress: $('task-progress'),
+  taskStatusCounts: $('task-status-counts'),
+  taskNodeControls: $('task-node-controls'),
+  taskNodeLabel: $('task-node-label'),
+  taskStatusSelect: $('task-status-select'),
+  metaSection: $('meta-section'),
+  metaTargetLabel: $('meta-target-label'),
+  metaEntries: $('meta-entries'),
+  metaPagination: $('meta-pagination'),
+  metaPageInfo: $('meta-page-info'),
+  metaPrevBtn: $('meta-prev-btn'),
+  metaNextBtn: $('meta-next-btn'),
+  metaKey: $('meta-key'),
+  metaValue: $('meta-value'),
+  exportBtn: $('export-btn'),
+  importBtn: $('import-btn'),
+  importFile: $('import-file'),
+};
+
+const canvas = dom.canvas;
+const ctx = canvas.getContext('2d');
+const tooltip = dom.tooltip;
+
+// ---- Utilities ----
+function findNode(id) {
+  return state.nodes.find(n => n.id === id);
+}
+
+function dpr() { return window.devicePixelRatio || 1; }
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function canvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+function buildNodeTooltipHTML(nodeId) {
+  const n = findNode(nodeId);
+  if (!n) return '';
+  const inDeg = state.edges.filter(e => e.to === nodeId).length;
+  const outDeg = state.edges.filter(e => e.from === nodeId).length;
+  const statusInfo = n.status ? `<div class="tt-detail">Status: ${n.status}</div>` : '';
+  const metaInfo = n.metaCount > 0 ? `<div class="tt-detail">Metadata: ${n.metaCount} entries</div>` : '';
+  return `<div class="tt-id">${esc(n.id)}</div><div class="tt-detail">In: ${inDeg} Out: ${outDeg}</div>${statusInfo}${metaInfo}`;
+}
+
+function positionTooltip(x, y) {
+  tooltip.style.display = 'block';
+  tooltip.style.left = (x + 14) + 'px';
+  tooltip.style.top = (y - 10) + 'px';
+}
+
+function showMode(text) {
+  dom.modeEl.textContent = text;
+  dom.modeEl.classList.toggle('visible', !!text);
+}
+
+function edgeColor(highlighted, isSelected, isHovered) {
+  return highlighted ? '#34d399' : isSelected ? '#fbbf24' : isHovered ? '#8b90ff' : '#3a3f55';
+}
+
+function handleSelection(pos, nodeId, edgeThreshold) {
+  // Complete edge creation
+  if (edgeStart && nodeId && edgeStart !== nodeId) {
+    addEdgeAPI(edgeStart, nodeId);
+    edgeStart = null;
+    showMode('');
+    return 'edge-complete';
+  }
+  if (nodeId) {
+    selected = { type: 'node', id: nodeId };
+  } else {
+    const edge = hitTestEdge(pos.x, pos.y, edgeThreshold);
+    if (edge) {
+      selected = { type: 'edge', ...edge };
+    } else {
+      selected = null;
+    }
+    edgeStart = null;
+    showMode('');
+  }
+  updateTaskControls();
+  updateMetaPanel();
+  render();
+  return nodeId ? 'node' : (selected ? 'edge' : null);
+}
+
+// ---- API Helpers ----
 async function api(path, body) {
   const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
   if (body !== undefined) opts.body = JSON.stringify(body);
@@ -629,17 +910,17 @@ async function syncState(data) {
 
 // ---- Actions ----
 async function addNodeFromForm() {
-  const id = document.getElementById('node-id').value.trim();
+  const id = dom.nodeId.value.trim();
   if (!id) return;
-  const label = document.getElementById('node-label').value.trim() || id;
+  const label = dom.nodeLabel.value.trim() || id;
   const cx = canvas.width / (2 * dpr());
   const cy = canvas.height / (2 * dpr());
   const x = cx + (Math.random() - 0.5) * 200;
   const y = cy + (Math.random() - 0.5) * 200;
   const data = await api('/api/node/add', { id, label, x, y });
   syncState(data);
-  document.getElementById('node-id').value = '';
-  document.getElementById('node-label').value = '';
+  dom.nodeId.value = '';
+  dom.nodeLabel.value = '';
   closeSidebarIfMobile();
 }
 
@@ -656,19 +937,19 @@ async function removeNode(id) {
 }
 
 async function addEdgeFromForm() {
-  const from = document.getElementById('edge-from').value.trim();
-  const to = document.getElementById('edge-to').value.trim();
-  const weight = parseFloat(document.getElementById('edge-weight').value) || 1;
+  const from = dom.edgeFrom.value.trim();
+  const to = dom.edgeTo.value.trim();
+  const weight = parseFloat(dom.edgeWeight.value) || 1;
   if (!from || !to) return;
   const data = await api('/api/edge/add', { from, to, weight });
   syncState(data);
-  document.getElementById('edge-from').value = '';
-  document.getElementById('edge-to').value = '';
+  dom.edgeFrom.value = '';
+  dom.edgeTo.value = '';
   closeSidebarIfMobile();
 }
 
 async function addEdgeAPI(from, to) {
-  const weight = parseFloat(document.getElementById('edge-weight').value) || 1;
+  const weight = parseFloat(dom.edgeWeight.value) || 1;
   const data = await api('/api/edge/add', { from, to, weight });
   syncState(data);
 }
@@ -682,134 +963,41 @@ async function clearGraph() {
   const data = await api('/api/graph/clear', {});
   syncState(data);
   clearResult();
+  selected = null;
+  updateMetaPanel();
   nodeCounter = 0;
 }
 
 async function updateNodePos(id, x, y) {
   api('/api/node/position', { id, x, y });
-  const n = state.nodes.find(n => n.id === id);
+  const n = findNode(id);
   if (n) { n.x = x; n.y = y; }
 }
 
-document.getElementById('directed-toggle').addEventListener('change', async (e) => {
-  const data = await api('/api/graph/directed', { directed: e.target.checked });
-  syncState(data);
-});
-
 async function runAlgo(algo) {
   clearResult();
-  const start = document.getElementById('algo-start').value.trim();
-  const end = document.getElementById('algo-end').value.trim();
+  const start = dom.algoStart.value.trim();
+  const end = dom.algoEnd.value.trim();
   const data = await api('/api/algo?algo=' + algo, { start, end });
   syncState(data);
   if (data.result) showResult(data.result);
   closeSidebarIfMobile();
 }
 
-// ---- Result display ----
-function showResult(result) {
-  const panel = document.getElementById('result-panel');
-  const title = document.getElementById('result-title');
-  const content = document.getElementById('result-content');
-  panel.classList.add('visible');
-  title.textContent = result.algorithm.replace('-', ' ').toUpperCase();
-
-  if (result.error) {
-    content.innerHTML = `<span class="error">${esc(result.error)}</span>`;
-    return;
-  }
-
-  let html = '';
-  if (result.visitedOrder) {
-    html += `<div>Order: <span class="highlight">${result.visitedOrder.join(' → ')}</span></div>`;
-  }
-  if (result.path) {
-    html += `<div>Path: <span class="highlight">${result.path.join(' → ')}</span></div>`;
-    html += `<div>Cost: <span class="highlight">${result.cost}</span></div>`;
-  }
-  if (result.hasCycle !== undefined) {
-    html += `<div>Cycle: <span class="highlight">${result.hasCycle ? 'Yes' : 'No'}</span></div>`;
-    if (result.cycle && result.cycle.length) {
-      html += `<div><span class="highlight">${result.cycle.join(' → ')} → ${result.cycle[0]}</span></div>`;
-    }
-  }
-  if (result.components && result.components.length) {
-    result.components.forEach((c, i) => {
-      html += `<div>Component ${i + 1}: <span class="highlight">${c.join(', ')}</span></div>`;
-    });
-  }
-  if (result.roots && result.roots.length) {
-    html += `<div>Roots: <span class="highlight">${result.roots.join(', ')}</span></div>`;
-  }
-  if (result.leaves && result.leaves.length) {
-    html += `<div>Leaves: <span class="highlight">${result.leaves.join(', ')}</span></div>`;
-  }
-  if (result.ancestors && result.ancestors.length) {
-    html += `<div>Ancestors: <span class="highlight">${result.ancestors.join(', ')}</span></div>`;
-  }
-  if (result.descendants && result.descendants.length) {
-    html += `<div>Descendants: <span class="highlight">${result.descendants.join(', ')}</span></div>`;
-  }
-  content.innerHTML = html || '<span class="highlight">No results</span>';
-
-  // Animate stepping through highlighted nodes
-  if (result.highlightNodes && result.highlightNodes.length > 1) {
-    animStep = 0;
-    if (animTimer) clearInterval(animTimer);
-    animTimer = setInterval(() => {
-      animStep++;
-      if (animStep >= result.highlightNodes.length) {
-        animStep = result.highlightNodes.length;
-        clearInterval(animTimer);
-        animTimer = null;
-      }
-      render();
-    }, 400);
-  }
-  render();
-}
-
-function clearResult() {
-  state.result = null;
-  document.getElementById('result-panel').classList.remove('visible');
-  if (animTimer) { clearInterval(animTimer); animTimer = null; }
-  animStep = 0;
-  render();
-}
-
-// ---- Canvas drawing ----
-function dpr() { return window.devicePixelRatio || 1; }
-
+// ---- Rendering ----
 function resize() {
   const r = dpr();
-  const wrap = document.getElementById('canvas-wrap');
-  canvas.width = wrap.clientWidth * r;
-  canvas.height = wrap.clientHeight * r;
+  canvas.width = dom.canvasWrap.clientWidth * r;
+  canvas.height = dom.canvasWrap.clientHeight * r;
   ctx.setTransform(r, 0, 0, r, 0, 0);
   render();
 }
 
-window.addEventListener('resize', resize);
-
-const NODE_RADIUS = 22;
-const COLORS = ['#6c7bff', '#34d399', '#f472b6', '#fbbf24', '#22d3ee', '#a78bfa', '#fb923c', '#4ade80'];
-
-const STATUS_COLORS = {
-  pending:  { fill: '#1a1d27', border: '#4a4f65' },
-  ready:    { fill: '#1a1d40', border: '#6c7bff' },
-  running:  { fill: '#3a3020', border: '#fbbf24' },
-  done:     { fill: '#1a3a30', border: '#34d399' },
-  failed:   { fill: '#3a1a1a', border: '#f87171' },
-  skipped:  { fill: '#1a1d27', border: '#8b90a0' },
-};
-
 function nodeColor(id) {
-  // Status-based color takes precedence
-  const n = state.nodes.find(n => n.id === id);
+  const n = findNode(id);
   if (n && n.status && STATUS_COLORS[n.status]) {
     return STATUS_COLORS[n.status].border;
   }
-  // Assign stable color by component if available
   if (state.result && state.result.components) {
     for (let i = 0; i < state.result.components.length; i++) {
       if (state.result.components[i].includes(id)) return COLORS[i % COLORS.length];
@@ -832,16 +1020,11 @@ function isHighlightedEdge(from, to) {
 }
 
 function getNodePos(id) {
-  const n = state.nodes.find(n => n.id === id);
+  const n = findNode(id);
   return n ? { x: n.x, y: n.y } : null;
 }
 
-function render() {
-  const w = canvas.width / dpr();
-  const h = canvas.height / dpr();
-  ctx.clearRect(0, 0, w, h);
-
-  // Draw grid
+function drawGrid(w, h) {
   ctx.strokeStyle = '#1a1d27';
   ctx.lineWidth = 1;
   const gridSize = 40;
@@ -851,8 +1034,9 @@ function render() {
   for (let y = 0; y < h; y += gridSize) {
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
   }
+}
 
-  // Draw edges
+function drawEdges() {
   for (const e of state.edges) {
     const from = getNodePos(e.from);
     const to = getNodePos(e.to);
@@ -861,16 +1045,18 @@ function render() {
     const highlighted = isHighlightedEdge(e.from, e.to);
     const isSelected = selected && selected.type === 'edge' && selected.from === e.from && selected.to === e.to;
     const isHovered = hoveredEdge && hoveredEdge.from === e.from && hoveredEdge.to === e.to;
+    const color = edgeColor(highlighted, isSelected, isHovered);
+    const lineWidth = highlighted || isSelected ? 2.5 : 1.5;
 
     // Self-loop
     if (e.from === e.to) {
-      ctx.strokeStyle = highlighted ? '#34d399' : isSelected ? '#fbbf24' : isHovered ? '#8b90ff' : '#3a3f55';
-      ctx.lineWidth = highlighted || isSelected ? 2.5 : 1.5;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lineWidth;
       ctx.beginPath();
       ctx.arc(from.x, from.y - NODE_RADIUS - 15, 15, 0.3, Math.PI * 2 - 0.3);
       ctx.stroke();
       if (state.directed) {
-        drawArrowArc(from.x, from.y - NODE_RADIUS - 15, 15, -0.3, ctx.strokeStyle);
+        drawArrowArc(from.x, from.y - NODE_RADIUS - 15, 15, -0.3, color);
       }
       continue;
     }
@@ -887,8 +1073,8 @@ function render() {
     const ex = to.x - ux * NODE_RADIUS;
     const ey = to.y - uy * NODE_RADIUS;
 
-    ctx.strokeStyle = highlighted ? '#34d399' : isSelected ? '#fbbf24' : isHovered ? '#8b90ff' : '#3a3f55';
-    ctx.lineWidth = highlighted || isSelected ? 2.5 : 1.5;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
     ctx.beginPath();
     ctx.moveTo(sx, sy);
     ctx.lineTo(ex, ey);
@@ -920,33 +1106,32 @@ function render() {
       ctx.fillText(String(e.weight), mx + nx, my + ny);
     }
   }
+}
 
-  // Draw edge-creation preview line
-  if (edgeStart) {
-    const from = getNodePos(edgeStart);
-    if (from && mousePos) {
-      ctx.strokeStyle = 'rgba(108, 123, 255, 0.4)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 4]);
-      ctx.beginPath();
-      ctx.moveTo(from.x, from.y);
-      ctx.lineTo(mousePos.x, mousePos.y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-  }
+function drawEdgePreview() {
+  if (!edgeStart) return;
+  const from = getNodePos(edgeStart);
+  if (!from || !mousePos) return;
+  ctx.strokeStyle = 'rgba(108, 123, 255, 0.4)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(mousePos.x, mousePos.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
 
-  // Draw nodes
+function drawNodes() {
   for (const n of state.nodes) {
     const highlighted = isHighlightedNode(n.id);
-    const isSelected = selected && selected.type === 'node' && selected.id === n.id;
+    const isSel = selected && selected.type === 'node' && selected.id === n.id;
     const isEdgeSource = edgeStart === n.id;
     const isHovered = hoveredNode === n.id;
-    const color = nodeColor(n.id);
     const sc = n.status && STATUS_COLORS[n.status] ? STATUS_COLORS[n.status] : null;
 
     // Glow
-    if (highlighted || isSelected) {
+    if (highlighted || isSel) {
       const glowColor = highlighted ? 'rgba(52, 211, 153, 0.25)' : 'rgba(251, 191, 36, 0.25)';
       ctx.beginPath();
       ctx.arc(n.x, n.y, NODE_RADIUS + 6, 0, Math.PI * 2);
@@ -957,18 +1142,18 @@ function render() {
     // Node circle
     ctx.beginPath();
     ctx.arc(n.x, n.y, NODE_RADIUS, 0, Math.PI * 2);
-    if (sc && !highlighted && !isSelected && !isEdgeSource) {
+    if (sc && !highlighted && !isSel && !isEdgeSource) {
       ctx.fillStyle = sc.fill;
     } else {
-      ctx.fillStyle = highlighted ? '#1a3a30' : isSelected ? '#3a3020' : isEdgeSource ? '#1a2040' : '#1a1d27';
+      ctx.fillStyle = highlighted ? '#1a3a30' : isSel ? '#3a3020' : isEdgeSource ? '#1a2040' : '#1a1d27';
     }
     ctx.fill();
-    if (sc && !highlighted && !isSelected && !isEdgeSource) {
+    if (sc && !highlighted && !isSel && !isEdgeSource) {
       ctx.strokeStyle = isHovered ? '#fff' : sc.border;
       ctx.lineWidth = 2.5;
     } else {
-      ctx.strokeStyle = highlighted ? '#34d399' : isSelected ? '#fbbf24' : isEdgeSource ? '#6c7bff' : isHovered ? '#6c7bff' : '#3a3f55';
-      ctx.lineWidth = highlighted || isSelected || isEdgeSource ? 2.5 : 1.5;
+      ctx.strokeStyle = highlighted ? '#34d399' : isSel ? '#fbbf24' : isEdgeSource ? '#6c7bff' : isHovered ? '#6c7bff' : '#3a3f55';
+      ctx.lineWidth = highlighted || isSel || isEdgeSource ? 2.5 : 1.5;
     }
     ctx.stroke();
 
@@ -986,6 +1171,14 @@ function render() {
       else if (n.status === 'skipped') { ctx.fillStyle = '#8b90a0'; ctx.fillText('\u2212', ix, iy); }
     }
 
+    // Metadata indicator (bottom-right dot)
+    if (n.metaCount > 0) {
+      ctx.beginPath();
+      ctx.arc(n.x + NODE_RADIUS * 0.65, n.y + NODE_RADIUS * 0.65, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#a78bfa';
+      ctx.fill();
+    }
+
     // Step number for animated traversal
     if (highlighted && state.result && state.result.highlightNodes) {
       const idx = state.result.highlightNodes.indexOf(n.id);
@@ -999,23 +1192,35 @@ function render() {
     }
 
     // Label
-    if (sc && !highlighted && !isSelected) {
+    if (sc && !highlighted && !isSel) {
       ctx.fillStyle = sc.border;
     } else {
-      ctx.fillStyle = highlighted ? '#34d399' : isSelected ? '#fbbf24' : '#e1e4ed';
+      ctx.fillStyle = highlighted ? '#34d399' : isSel ? '#fbbf24' : '#e1e4ed';
     }
     ctx.font = '13px -apple-system, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(n.label || n.id, n.x, n.y);
   }
+}
 
-  // Stats
+function drawStats(w, h) {
   ctx.fillStyle = '#4a4f65';
   ctx.font = '12px -apple-system, sans-serif';
   ctx.textAlign = 'right';
   ctx.textBaseline = 'bottom';
-  ctx.fillText(`${state.nodes.length} nodes · ${state.edges.length} edges`, w - 12, h - 12);
+  ctx.fillText(`${state.nodes.length} nodes \u00b7 ${state.edges.length} edges`, w - 12, h - 12);
+}
+
+function render() {
+  const w = canvas.width / dpr();
+  const h = canvas.height / dpr();
+  ctx.clearRect(0, 0, w, h);
+  drawGrid(w, h);
+  drawEdges();
+  drawEdgePreview();
+  drawNodes();
+  drawStats(w, h);
 }
 
 function drawArrowArc(cx, cy, r, endAngle, color) {
@@ -1031,7 +1236,7 @@ function drawArrowArc(cx, cy, r, endAngle, color) {
   ctx.fill();
 }
 
-// ---- Hit testing ----
+// ---- Hit Testing ----
 function hitTestNode(x, y, radius) {
   const r = radius || NODE_RADIUS;
   for (let i = state.nodes.length - 1; i >= 0; i--) {
@@ -1065,16 +1270,418 @@ function distToSegment(px, py, x1, y1, x2, y2) {
   return Math.sqrt((px - cx) ** 2 + (py - cy) ** 2);
 }
 
-// ---- Mouse events ----
+// ---- Result Display ----
+function showResult(result) {
+  dom.resultPanel.classList.add('visible');
+  dom.resultTitle.textContent = result.algorithm.replace('-', ' ').toUpperCase();
+
+  if (result.error) {
+    dom.resultContent.innerHTML = `<span class="error">${esc(result.error)}</span>`;
+    return;
+  }
+
+  let html = '';
+  if (result.visitedOrder) {
+    html += `<div>Order: <span class="highlight">${result.visitedOrder.join(' \u2192 ')}</span></div>`;
+  }
+  if (result.path) {
+    html += `<div>Path: <span class="highlight">${result.path.join(' \u2192 ')}</span></div>`;
+    html += `<div>Cost: <span class="highlight">${result.cost}</span></div>`;
+  }
+  if (result.hasCycle !== undefined) {
+    html += `<div>Cycle: <span class="highlight">${result.hasCycle ? 'Yes' : 'No'}</span></div>`;
+    if (result.cycle && result.cycle.length) {
+      html += `<div><span class="highlight">${result.cycle.join(' \u2192 ')} \u2192 ${result.cycle[0]}</span></div>`;
+    }
+  }
+  if (result.components && result.components.length) {
+    result.components.forEach((c, i) => {
+      html += `<div>Component ${i + 1}: <span class="highlight">${c.join(', ')}</span></div>`;
+    });
+  }
+  if (result.roots && result.roots.length) {
+    html += `<div>Roots: <span class="highlight">${result.roots.join(', ')}</span></div>`;
+  }
+  if (result.leaves && result.leaves.length) {
+    html += `<div>Leaves: <span class="highlight">${result.leaves.join(', ')}</span></div>`;
+  }
+  if (result.ancestors && result.ancestors.length) {
+    html += `<div>Ancestors: <span class="highlight">${result.ancestors.join(', ')}</span></div>`;
+  }
+  if (result.descendants && result.descendants.length) {
+    html += `<div>Descendants: <span class="highlight">${result.descendants.join(', ')}</span></div>`;
+  }
+  dom.resultContent.innerHTML = html || '<span class="highlight">No results</span>';
+
+  // Animate stepping through highlighted nodes
+  if (result.highlightNodes && result.highlightNodes.length > 1) {
+    animStep = 0;
+    if (animTimer) clearInterval(animTimer);
+    animTimer = setInterval(() => {
+      animStep++;
+      if (animStep >= result.highlightNodes.length) {
+        animStep = result.highlightNodes.length;
+        clearInterval(animTimer);
+        animTimer = null;
+      }
+      render();
+    }, 400);
+  }
+  render();
+}
+
+function clearResult() {
+  state.result = null;
+  dom.resultPanel.classList.remove('visible');
+  if (animTimer) { clearInterval(animTimer); animTimer = null; }
+  animStep = 0;
+  render();
+}
+
+// ---- Task Controls ----
+function hasTaskNodes() {
+  return state.nodes.some(n => n.status);
+}
+
+function updateTaskControls() {
+  const hasTasks = hasTaskNodes();
+  dom.taskSection.classList.toggle('visible', hasTasks);
+  dom.statusLegend.classList.toggle('visible', hasTasks);
+  if (!hasTasks) return;
+
+  const counts = { pending: 0, ready: 0, running: 0, done: 0, failed: 0, skipped: 0 };
+  const taskNodes = state.nodes.filter(n => n.status);
+  for (const n of taskNodes) {
+    if (counts[n.status] !== undefined) counts[n.status]++;
+  }
+  const total = taskNodes.length;
+  const doneCount = counts.done;
+  const pct = total > 0 ? Math.round(doneCount / total * 100) : 0;
+
+  dom.taskDoneCount.textContent = doneCount + '/' + total;
+  dom.taskPct.textContent = pct;
+  dom.taskProgress.style.width = pct + '%';
+
+  const dotColors = { pending: '#4a4f65', ready: '#6c7bff', running: '#fbbf24', done: '#34d399', failed: '#f87171', skipped: '#8b90a0' };
+  let html = '';
+  for (const [s, c] of Object.entries(counts)) {
+    if (c > 0) {
+      html += `<span><span class="status-dot" style="background:${dotColors[s]}"></span>${c} ${s}</span>`;
+    }
+  }
+  dom.taskStatusCounts.innerHTML = html;
+
+  // Node-specific controls
+  if (selected && selected.type === 'node') {
+    const n = findNode(selected.id);
+    if (n && n.status) {
+      dom.taskNodeControls.classList.add('visible');
+      dom.taskNodeLabel.textContent = n.label || n.id;
+      dom.taskStatusSelect.value = n.status;
+    } else {
+      dom.taskNodeControls.classList.remove('visible');
+    }
+  } else {
+    dom.taskNodeControls.classList.remove('visible');
+  }
+}
+
+async function updateNodeStatus() {
+  if (!selected || selected.type !== 'node') return;
+  const status = dom.taskStatusSelect.value;
+  const data = await api('/api/node/status', { id: selected.id, status });
+  syncState(data);
+}
+
+async function resetAllStatuses() {
+  for (const n of state.nodes) {
+    if (n.status) {
+      await api('/api/node/status', { id: n.id, status: 'pending' });
+    }
+  }
+  const res = await fetch('/api/graph');
+  const data = await res.json();
+  syncState(data);
+}
+
+// ---- Metadata Panel ----
+function inferType(value) {
+  if (value === null || value === undefined) return 'null';
+  if (typeof value === 'string') return 'str';
+  if (typeof value === 'number') return 'num';
+  if (typeof value === 'boolean') return 'bool';
+  if (Array.isArray(value)) return 'arr';
+  if (typeof value === 'object') return 'obj';
+  return 'any';
+}
+
+function formatValue(value) {
+  if (value === null || value === undefined) return 'null';
+  if (typeof value === 'string') return '"' + value + '"';
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (typeof value === 'object') {
+    const s = JSON.stringify(value);
+    return s.length > 80 ? s.substring(0, 77) + '...' : s;
+  }
+  return String(value);
+}
+
+async function fetchNodeMeta(nodeId, offset) {
+  try {
+    const data = await api('/api/node/meta', { id: nodeId, offset: offset || 0, limit: META_PAGE_SIZE });
+    metaState = data;
+    renderMetaEntries();
+  } catch(e) {
+    metaState = { items: [], total: 0, offset: 0, hasMore: false };
+    renderMetaEntries();
+  }
+}
+
+async function fetchEdgeMeta(from, to, offset) {
+  try {
+    const data = await api('/api/edge/meta', { from, to, offset: offset || 0, limit: META_PAGE_SIZE });
+    metaState = data;
+    renderMetaEntries();
+  } catch(e) {
+    metaState = { items: [], total: 0, offset: 0, hasMore: false };
+    renderMetaEntries();
+  }
+}
+
+function updateMetaPanel() {
+  if (selected && selected.type === 'node') {
+    dom.metaSection.style.display = 'block';
+    const n = findNode(selected.id);
+    dom.metaTargetLabel.innerHTML = 'Node: <strong>' + esc(n ? (n.label || n.id) : selected.id) + '</strong>';
+    fetchNodeMeta(selected.id, 0);
+  } else if (selected && selected.type === 'edge') {
+    dom.metaSection.style.display = 'block';
+    dom.metaTargetLabel.innerHTML = 'Edge: <strong>' + esc(selected.from) + ' \u2192 ' + esc(selected.to) + '</strong>';
+    fetchEdgeMeta(selected.from, selected.to, 0);
+  } else {
+    dom.metaSection.style.display = 'none';
+    metaState = { items: [], total: 0, offset: 0, hasMore: false };
+  }
+}
+
+function renderMetaEntries() {
+  const container = dom.metaEntries;
+  if (metaState.items.length === 0 && metaState.total === 0) {
+    container.innerHTML = '<div class="meta-empty">No metadata entries</div>';
+    dom.metaPagination.style.display = 'none';
+    return;
+  }
+
+  let html = '';
+  for (const item of metaState.items) {
+    const typeTag = inferType(item.value);
+    const displayVal = formatValue(item.value);
+    html += `<div class="meta-entry">
+      <div class="meta-entry-header">
+        <span class="meta-key">${esc(item.key)}</span>
+        <span class="meta-type">${typeTag}</span>
+        <button class="meta-del-btn" data-key="${esc(item.key)}">\u00d7</button>
+      </div>
+      <div class="meta-value">${esc(displayVal)}</div>
+    </div>`;
+  }
+  container.innerHTML = html;
+
+  // Wire delete buttons
+  container.querySelectorAll('.meta-del-btn').forEach(btn => {
+    btn.addEventListener('click', () => deleteMeta(btn.dataset.key));
+  });
+
+  // Pagination
+  if (metaState.total > META_PAGE_SIZE) {
+    dom.metaPagination.style.display = 'flex';
+    const page = Math.floor(metaState.offset / META_PAGE_SIZE) + 1;
+    const totalPages = Math.ceil(metaState.total / META_PAGE_SIZE);
+    dom.metaPageInfo.textContent = page + ' / ' + totalPages;
+    dom.metaPrevBtn.disabled = metaState.offset === 0;
+    dom.metaNextBtn.disabled = !metaState.hasMore;
+  } else {
+    dom.metaPagination.style.display = 'none';
+  }
+}
+
+async function addMeta() {
+  const key = dom.metaKey.value.trim();
+  let rawValue = dom.metaValue.value.trim();
+  if (!key || rawValue === '') return;
+
+  // Try to parse as JSON (for numbers, booleans, arrays, objects)
+  let value;
+  try {
+    value = JSON.parse(rawValue);
+  } catch(e) {
+    value = rawValue; // treat as string
+  }
+
+  if (selected && selected.type === 'node') {
+    const data = await api('/api/node/meta/set', { id: selected.id, key, value });
+    syncState(data);
+    fetchNodeMeta(selected.id, metaState.offset);
+  } else if (selected && selected.type === 'edge') {
+    const data = await api('/api/edge/meta/set', { from: selected.from, to: selected.to, key, value });
+    syncState(data);
+    fetchEdgeMeta(selected.from, selected.to, metaState.offset);
+  }
+
+  dom.metaKey.value = '';
+  dom.metaValue.value = '';
+}
+
+async function deleteMeta(key) {
+  if (selected && selected.type === 'node') {
+    const data = await api('/api/node/meta/delete', { id: selected.id, key });
+    syncState(data);
+    // If current page would be empty, go to previous page
+    const newOffset = (metaState.items.length <= 1 && metaState.offset > 0)
+      ? Math.max(0, metaState.offset - META_PAGE_SIZE) : metaState.offset;
+    fetchNodeMeta(selected.id, newOffset);
+  } else if (selected && selected.type === 'edge') {
+    const data = await api('/api/edge/meta/delete', { from: selected.from, to: selected.to, key });
+    syncState(data);
+    const newOffset = (metaState.items.length <= 1 && metaState.offset > 0)
+      ? Math.max(0, metaState.offset - META_PAGE_SIZE) : metaState.offset;
+    fetchEdgeMeta(selected.from, selected.to, newOffset);
+  }
+}
+
+function metaPrevPage() {
+  const newOffset = Math.max(0, metaState.offset - META_PAGE_SIZE);
+  if (selected && selected.type === 'node') {
+    fetchNodeMeta(selected.id, newOffset);
+  } else if (selected && selected.type === 'edge') {
+    fetchEdgeMeta(selected.from, selected.to, newOffset);
+  }
+}
+
+function metaNextPage() {
+  if (!metaState.hasMore) return;
+  const newOffset = metaState.offset + META_PAGE_SIZE;
+  if (selected && selected.type === 'node') {
+    fetchNodeMeta(selected.id, newOffset);
+  } else if (selected && selected.type === 'edge') {
+    fetchEdgeMeta(selected.from, selected.to, newOffset);
+  }
+}
+
+// ---- Export / Import ----
+async function exportGraph() {
+  try {
+    const res = await fetch('/api/graph/export');
+    if (!res.ok) throw new Error(await res.text());
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'spine-graph.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch(e) {
+    console.error('Export failed:', e);
+  }
+}
+
+async function handleImportFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const res = await fetch('/api/graph/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: text,
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    selected = null;
+    edgeStart = null;
+    showMode('');
+    syncState(data);
+    dom.directedToggle.checked = data.directed;
+    clearResult();
+    updateMetaPanel();
+    nodeCounter = 0;
+    syncNodeCounter();
+    closeSidebarIfMobile();
+  } catch(e) {
+    console.error('Import failed:', e);
+  }
+  dom.importFile.value = '';
+}
+
+// ---- Templates ----
+let templateList = [];
+
+async function fetchTemplates() {
+  const res = await fetch('/api/templates');
+  templateList = await res.json();
+  templateList.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.id;
+    opt.textContent = t.name;
+    dom.templateSelect.appendChild(opt);
+  });
+}
+
+function onTemplateSelect() {
+  const id = dom.templateSelect.value;
+  const t = templateList.find(t => t.id === id);
+  if (t) {
+    dom.templateDesc.textContent = t.description + ' (' + t.nodeCount + ' nodes, ' + t.edgeCount + ' edges)';
+    dom.loadTemplateBtn.disabled = false;
+  } else {
+    dom.templateDesc.textContent = '';
+    dom.loadTemplateBtn.disabled = true;
+  }
+}
+
+async function loadTemplate() {
+  const id = dom.templateSelect.value;
+  if (!id) return;
+  const data = await api('/api/template/load', { id });
+  selected = null;
+  syncState(data);
+  updateMetaPanel();
+  clearResult();
+  dom.directedToggle.checked = data.directed;
+  nodeCounter = 0;
+  syncNodeCounter();
+  closeSidebarIfMobile();
+}
+
+function syncNodeCounter() {
+  for (const n of state.nodes) {
+    const m = n.id.match(/^n(\d+)$/);
+    if (m) nodeCounter = Math.max(nodeCounter, parseInt(m[1]));
+  }
+}
+
+// ---- Sidebar ----
+function openSidebar() {
+  dom.sidebar.classList.add('open');
+  dom.sidebarOverlay.classList.add('visible');
+}
+
+function closeSidebar() {
+  dom.sidebar.classList.remove('open');
+  dom.sidebarOverlay.classList.remove('visible');
+}
+
+function closeSidebarIfMobile() {
+  if (window.innerWidth <= 767) closeSidebar();
+}
+
+// ---- Event Handlers: Mouse ----
 let mousePos = null;
 let lastClick = 0;
 
-function canvasCoords(e) {
-  const rect = canvas.getBoundingClientRect();
-  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-}
-
-canvas.addEventListener('mousedown', (e) => {
+function onMouseDown(e) {
   const pos = canvasCoords(e);
   const now = Date.now();
   const nodeId = hitTestNode(pos.x, pos.y);
@@ -1087,43 +1694,19 @@ canvas.addEventListener('mousedown', (e) => {
   }
   lastClick = now;
 
-  if (nodeId) {
-    if (edgeStart && edgeStart !== nodeId) {
-      // Complete edge creation
-      addEdgeAPI(edgeStart, nodeId);
-      edgeStart = null;
-      showMode('');
-      return;
-    }
-    // Start dragging
-    const n = state.nodes.find(n => n.id === nodeId);
+  const result = handleSelection(pos, nodeId);
+  if (result === 'node') {
+    const n = findNode(nodeId);
     dragging = { id: nodeId, offsetX: pos.x - n.x, offsetY: pos.y - n.y };
-    selected = { type: 'node', id: nodeId };
-    updateTaskControls();
-    render();
-  } else {
-    // Check edge
-    const edge = hitTestEdge(pos.x, pos.y);
-    if (edge) {
-      selected = { type: 'edge', ...edge };
-      edgeStart = null;
-      showMode('');
-    } else {
-      selected = null;
-      edgeStart = null;
-      showMode('');
-    }
-    updateTaskControls();
-    render();
   }
-});
+}
 
-canvas.addEventListener('mousemove', (e) => {
+function onMouseMove(e) {
   const pos = canvasCoords(e);
   mousePos = pos;
 
   if (dragging) {
-    const n = state.nodes.find(n => n.id === dragging.id);
+    const n = findNode(dragging.id);
     if (n) {
       n.x = pos.x - dragging.offsetX;
       n.y = pos.y - dragging.offsetY;
@@ -1143,20 +1726,16 @@ canvas.addEventListener('mousemove', (e) => {
 
   // Tooltip
   if (nodeId) {
-    const n = state.nodes.find(n => n.id === nodeId);
-    const inDeg = state.edges.filter(e => e.to === nodeId).length;
-    const outDeg = state.edges.filter(e => e.from === nodeId).length;
-    const statusInfo = n.status ? `<div class="tt-detail">Status: ${n.status}</div>` : '';
-    tooltip.innerHTML = `<div class="tt-id">${esc(n.id)}</div><div class="tt-detail">In: ${inDeg} Out: ${outDeg}</div>${statusInfo}`;
-    tooltip.style.display = 'block';
-    tooltip.style.left = (e.clientX - canvas.getBoundingClientRect().left + 14) + 'px';
-    tooltip.style.top = (e.clientY - canvas.getBoundingClientRect().top - 10) + 'px';
+    tooltip.innerHTML = buildNodeTooltipHTML(nodeId);
+    positionTooltip(pos.x, pos.y);
   } else if (edge) {
     const ed = state.edges.find(x => x.from === edge.from && x.to === edge.to);
-    tooltip.innerHTML = `<div class="tt-id">${esc(edge.from)} → ${esc(edge.to)}</div><div class="tt-detail">Weight: ${ed ? ed.weight : '?'}</div>`;
-    tooltip.style.display = 'block';
-    tooltip.style.left = (e.clientX - canvas.getBoundingClientRect().left + 14) + 'px';
-    tooltip.style.top = (e.clientY - canvas.getBoundingClientRect().top - 10) + 'px';
+    let ttHtml = `<div class="tt-id">${esc(edge.from)} \u2192 ${esc(edge.to)}</div><div class="tt-detail">Weight: ${ed ? ed.weight : '?'}</div>`;
+    if (ed && ed.metaCount > 0) {
+      ttHtml += `<div class="tt-detail">Metadata: ${ed.metaCount} entries</div>`;
+    }
+    tooltip.innerHTML = ttHtml;
+    positionTooltip(pos.x, pos.y);
   } else {
     tooltip.style.display = 'none';
   }
@@ -1165,198 +1744,25 @@ canvas.addEventListener('mousemove', (e) => {
   if (edgeStart) render();
 
   canvas.style.cursor = nodeId ? 'grab' : edge ? 'pointer' : edgeStart ? 'crosshair' : 'default';
-});
+}
 
-canvas.addEventListener('mouseup', () => {
+function onMouseUp() {
   if (dragging) {
-    updateNodePos(dragging.id, state.nodes.find(n => n.id === dragging.id).x, state.nodes.find(n => n.id === dragging.id).y);
+    const n = findNode(dragging.id);
+    if (n) updateNodePos(dragging.id, n.x, n.y);
     dragging = null;
   }
-});
+}
 
-canvas.addEventListener('mouseleave', () => {
+function onMouseLeave() {
   tooltip.style.display = 'none';
   hoveredNode = null;
   hoveredEdge = null;
   mousePos = null;
   render();
-});
-
-// ---- Keyboard ----
-document.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'INPUT') return;
-
-  if (e.key === 'Escape') {
-    selected = null;
-    edgeStart = null;
-    showMode('');
-    clearResult();
-    updateTaskControls();
-    render();
-  }
-
-  if ((e.key === 'Delete' || e.key === 'Backspace') && selected) {
-    if (selected.type === 'node') removeNode(selected.id);
-    else if (selected.type === 'edge') removeEdge(selected.from, selected.to);
-    selected = null;
-    updateTaskControls();
-  }
-
-  // 'e' to start edge mode from selected node
-  if (e.key === 'e' && selected && selected.type === 'node') {
-    edgeStart = selected.id;
-    showMode('Edge mode: click target node');
-    render();
-  }
-});
-
-function showMode(text) {
-  modeEl.textContent = text;
-  modeEl.classList.toggle('visible', !!text);
 }
 
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-
-// ---- Task Controls ----
-function hasTaskNodes() {
-  return state.nodes.some(n => n.status);
-}
-
-function updateTaskControls() {
-  const section = document.getElementById('task-section');
-  const legend = document.getElementById('status-legend');
-  const hasTasks = hasTaskNodes();
-  section.style.display = hasTasks ? '' : 'none';
-  legend.classList.toggle('visible', hasTasks);
-  if (!hasTasks) return;
-
-  const counts = { pending: 0, ready: 0, running: 0, done: 0, failed: 0, skipped: 0 };
-  const taskNodes = state.nodes.filter(n => n.status);
-  for (const n of taskNodes) {
-    if (counts[n.status] !== undefined) counts[n.status]++;
-  }
-  const total = taskNodes.length;
-  const doneCount = counts.done;
-  const pct = total > 0 ? Math.round(doneCount / total * 100) : 0;
-
-  document.getElementById('task-done-count').textContent = doneCount + '/' + total;
-  document.getElementById('task-pct').textContent = pct;
-  document.getElementById('task-progress').style.width = pct + '%';
-
-  const countsEl = document.getElementById('task-status-counts');
-  const dotColors = { pending: '#4a4f65', ready: '#6c7bff', running: '#fbbf24', done: '#34d399', failed: '#f87171', skipped: '#8b90a0' };
-  let html = '';
-  for (const [s, c] of Object.entries(counts)) {
-    if (c > 0) {
-      html += `<span><span class="status-dot" style="background:${dotColors[s]}"></span>${c} ${s}</span>`;
-    }
-  }
-  countsEl.innerHTML = html;
-
-  // Node-specific controls
-  const nodeControls = document.getElementById('task-node-controls');
-  if (selected && selected.type === 'node') {
-    const n = state.nodes.find(nd => nd.id === selected.id);
-    if (n && n.status) {
-      nodeControls.style.display = '';
-      document.getElementById('task-node-label').textContent = n.label || n.id;
-      document.getElementById('task-status-select').value = n.status;
-    } else {
-      nodeControls.style.display = 'none';
-    }
-  } else {
-    nodeControls.style.display = 'none';
-  }
-}
-
-async function updateNodeStatus() {
-  if (!selected || selected.type !== 'node') return;
-  const status = document.getElementById('task-status-select').value;
-  const data = await api('/api/node/status', { id: selected.id, status });
-  syncState(data);
-}
-
-async function resetAllStatuses() {
-  for (const n of state.nodes) {
-    if (n.status) {
-      await api('/api/node/status', { id: n.id, status: 'pending' });
-    }
-  }
-  const res = await fetch('/api/graph');
-  const data = await res.json();
-  syncState(data);
-}
-
-// ---- Templates ----
-let templateList = [];
-
-async function fetchTemplates() {
-  const res = await fetch('/api/templates');
-  templateList = await res.json();
-  const sel = document.getElementById('template-select');
-  templateList.forEach(t => {
-    const opt = document.createElement('option');
-    opt.value = t.id;
-    opt.textContent = t.name;
-    sel.appendChild(opt);
-  });
-}
-
-function onTemplateSelect() {
-  const id = document.getElementById('template-select').value;
-  const desc = document.getElementById('template-desc');
-  const btn = document.getElementById('load-template-btn');
-  const t = templateList.find(t => t.id === id);
-  if (t) {
-    desc.textContent = t.description + ' (' + t.nodeCount + ' nodes, ' + t.edgeCount + ' edges)';
-    btn.disabled = false;
-  } else {
-    desc.textContent = '';
-    btn.disabled = true;
-  }
-}
-
-async function loadTemplate() {
-  const id = document.getElementById('template-select').value;
-  if (!id) return;
-  const data = await api('/api/template/load', { id });
-  syncState(data);
-  clearResult();
-  document.getElementById('directed-toggle').checked = data.directed;
-  nodeCounter = 0;
-  syncNodeCounter();
-  closeSidebarIfMobile();
-}
-
-// ---- Mobile sidebar toggle ----
-const menuToggle = document.getElementById('menu-toggle');
-const sidebar = document.getElementById('sidebar');
-const sidebarOverlay = document.getElementById('sidebar-overlay');
-
-function openSidebar() {
-  sidebar.classList.add('open');
-  sidebarOverlay.classList.add('visible');
-}
-
-function closeSidebar() {
-  sidebar.classList.remove('open');
-  sidebarOverlay.classList.remove('visible');
-}
-
-function closeSidebarIfMobile() {
-  if (window.innerWidth <= 767) closeSidebar();
-}
-
-menuToggle.addEventListener('click', () => {
-  if (sidebar.classList.contains('open')) closeSidebar();
-  else openSidebar();
-});
-
-sidebarOverlay.addEventListener('click', closeSidebar);
-
-// ---- Touch event handling ----
-const TOUCH_NODE_RADIUS = 30;
-const TOUCH_EDGE_THRESHOLD = 16;
+// ---- Event Handlers: Touch ----
 let touchStartTime = 0;
 let touchStartPos = null;
 let touchNodeId = null;
@@ -1366,30 +1772,19 @@ let longPressTimer = null;
 let lastTapTime = 0;
 let tooltipTimer = null;
 
-function canvasTouchCoords(touch) {
-  const rect = canvas.getBoundingClientRect();
-  return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
-}
-
 function showNodeTooltip(nodeId, pos) {
-  const n = state.nodes.find(n => n.id === nodeId);
-  if (!n) return;
-  const inDeg = state.edges.filter(e => e.to === nodeId).length;
-  const outDeg = state.edges.filter(e => e.from === nodeId).length;
-  const statusInfo = n.status ? `<div class="tt-detail">Status: ${n.status}</div>` : '';
-  tooltip.innerHTML = `<div class="tt-id">${esc(n.id)}</div><div class="tt-detail">In: ${inDeg} Out: ${outDeg}</div>${statusInfo}`;
-  tooltip.style.display = 'block';
-  tooltip.style.left = (pos.x + 14) + 'px';
-  tooltip.style.top = (pos.y - 10) + 'px';
+  const html = buildNodeTooltipHTML(nodeId);
+  if (!html) return;
+  tooltip.innerHTML = html;
+  positionTooltip(pos.x, pos.y);
   if (tooltipTimer) clearTimeout(tooltipTimer);
   tooltipTimer = setTimeout(() => { tooltip.style.display = 'none'; }, 2000);
 }
 
-canvas.addEventListener('touchstart', (e) => {
-  if (sidebar.classList.contains('open')) return;
+function onTouchStart(e) {
+  if (dom.sidebar.classList.contains('open')) return;
   e.preventDefault();
-  const touch = e.touches[0];
-  const pos = canvasTouchCoords(touch);
+  const pos = canvasCoords(e.touches[0]);
   touchStartTime = Date.now();
   touchStartPos = pos;
   touchMoved = false;
@@ -1410,13 +1805,12 @@ canvas.addEventListener('touchstart', (e) => {
       }
     }, 500);
   }
-}, { passive: false });
+}
 
-canvas.addEventListener('touchmove', (e) => {
-  if (sidebar.classList.contains('open')) return;
+function onTouchMove(e) {
+  if (dom.sidebar.classList.contains('open')) return;
   e.preventDefault();
-  const touch = e.touches[0];
-  const pos = canvasTouchCoords(touch);
+  const pos = canvasCoords(e.touches[0]);
 
   if (!touchMoved && touchStartPos) {
     const dx = pos.x - touchStartPos.x;
@@ -1430,7 +1824,7 @@ canvas.addEventListener('touchmove', (e) => {
   if (touchMoved && touchNodeId && !edgeStart) {
     // Drag node
     touchDragging = true;
-    const n = state.nodes.find(n => n.id === touchNodeId);
+    const n = findNode(touchNodeId);
     if (n) {
       n.x = pos.x;
       n.y = pos.y;
@@ -1443,10 +1837,10 @@ canvas.addEventListener('touchmove', (e) => {
     mousePos = pos;
     render();
   }
-}, { passive: false });
+}
 
-canvas.addEventListener('touchend', (e) => {
-  if (sidebar.classList.contains('open')) return;
+function onTouchEnd(e) {
+  if (dom.sidebar.classList.contains('open')) return;
   e.preventDefault();
   if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
 
@@ -1455,7 +1849,7 @@ canvas.addEventListener('touchend', (e) => {
 
   // If we were dragging, finalize position
   if (touchDragging && touchNodeId) {
-    const n = state.nodes.find(n => n.id === touchNodeId);
+    const n = findNode(touchNodeId);
     if (n) updateNodePos(touchNodeId, n.x, n.y);
     touchDragging = false;
     touchNodeId = null;
@@ -1482,51 +1876,107 @@ canvas.addEventListener('touchend', (e) => {
   }
   lastTapTime = now;
 
-  // Edge mode: tap target node to complete edge
-  if (edgeStart && nodeId && edgeStart !== nodeId) {
-    addEdgeAPI(edgeStart, nodeId);
-    edgeStart = null;
-    showMode('');
-    touchStartPos = null;
-    return;
-  }
-
-  // Tap on a node: select it
-  if (nodeId) {
-    selected = { type: 'node', id: nodeId };
+  const result = handleSelection(pos, nodeId, TOUCH_EDGE_THRESHOLD);
+  if (result === 'node') {
     showNodeTooltip(nodeId, pos);
-    updateTaskControls();
-    render();
-  } else {
-    // Check edge tap
-    const edge = hitTestEdge(pos.x, pos.y, TOUCH_EDGE_THRESHOLD);
-    if (edge) {
-      selected = { type: 'edge', ...edge };
-      edgeStart = null;
-      showMode('');
-    } else {
-      selected = null;
-      edgeStart = null;
-      showMode('');
-    }
-    updateTaskControls();
-    render();
   }
   touchStartPos = null;
-}, { passive: false });
+}
+
+// ---- Event Handlers: Keyboard ----
+function onKeyDown(e) {
+  if (e.target.tagName === 'INPUT') return;
+
+  if (e.key === 'Escape') {
+    selected = null;
+    edgeStart = null;
+    showMode('');
+    clearResult();
+    updateTaskControls();
+    updateMetaPanel();
+    render();
+  }
+
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selected) {
+    if (selected.type === 'node') removeNode(selected.id);
+    else if (selected.type === 'edge') removeEdge(selected.from, selected.to);
+    selected = null;
+    updateTaskControls();
+    updateMetaPanel();
+  }
+
+  // 'e' to start edge mode from selected node
+  if (e.key === 'e' && selected && selected.type === 'node') {
+    edgeStart = selected.id;
+    showMode('Edge mode: click target node');
+    render();
+  }
+}
+
+// ---- Event Bindings ----
+
+// Sidebar
+dom.menuToggle.addEventListener('click', () => {
+  if (dom.sidebar.classList.contains('open')) closeSidebar();
+  else openSidebar();
+});
+dom.sidebarOverlay.addEventListener('click', closeSidebar);
+
+// Graph controls
+dom.directedToggle.addEventListener('change', async (e) => {
+  const data = await api('/api/graph/directed', { directed: e.target.checked });
+  syncState(data);
+});
+$('clear-graph-btn').addEventListener('click', clearGraph);
+
+// Export / Import
+dom.exportBtn.addEventListener('click', exportGraph);
+dom.importBtn.addEventListener('click', () => dom.importFile.click());
+dom.importFile.addEventListener('change', handleImportFile);
+
+// Templates
+dom.templateSelect.addEventListener('change', onTemplateSelect);
+dom.loadTemplateBtn.addEventListener('click', loadTemplate);
+
+// Node/Edge forms
+$('add-node-btn').addEventListener('click', addNodeFromForm);
+$('add-edge-btn').addEventListener('click', addEdgeFromForm);
+
+// Task controls
+$('update-status-btn').addEventListener('click', updateNodeStatus);
+$('reset-all-btn').addEventListener('click', resetAllStatuses);
+
+// Metadata controls
+$('meta-add-btn').addEventListener('click', addMeta);
+dom.metaPrevBtn.addEventListener('click', metaPrevPage);
+dom.metaNextBtn.addEventListener('click', metaNextPage);
+
+// Algorithms (event delegation)
+document.querySelector('.algo-grid').addEventListener('click', (e) => {
+  const algo = e.target.dataset.algo;
+  if (algo) runAlgo(algo);
+});
+
+// Result
+$('clear-result-btn').addEventListener('click', clearResult);
+
+// Canvas
+canvas.addEventListener('mousedown', onMouseDown);
+canvas.addEventListener('mousemove', onMouseMove);
+canvas.addEventListener('mouseup', onMouseUp);
+canvas.addEventListener('mouseleave', onMouseLeave);
+canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+canvas.addEventListener('touchend', onTouchEnd, { passive: false });
+
+// Keyboard & Window
+document.addEventListener('keydown', onKeyDown);
+window.addEventListener('resize', resize);
 
 // ---- Init ----
 resize();
 fetchGraph();
 fetchTemplates();
-
-// Update max nodeCounter based on existing nodes
-function syncNodeCounter() {
-  for (const n of state.nodes) {
-    const m = n.id.match(/^n(\d+)$/);
-    if (m) nodeCounter = Math.max(nodeCounter, parseInt(m[1]));
-  }
-}
 </script>
 </body>
 </html>

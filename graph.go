@@ -26,6 +26,8 @@ type Graph[N, E any] struct {
 	nodes    map[string]Node[N]
 	out      map[string]map[string]Edge[E] // from -> to -> edge
 	in       map[string]map[string]Edge[E] // to -> from -> edge
+	nodeMeta map[string]*Store             // node ID -> metadata store
+	edgeMeta map[string]map[string]*Store  // from -> to -> metadata store
 }
 
 // NewGraph creates a new graph. If directed is true, edges are one-way.
@@ -35,6 +37,8 @@ func NewGraph[N, E any](directed bool) *Graph[N, E] {
 		nodes:    make(map[string]Node[N]),
 		out:      make(map[string]map[string]Edge[E]),
 		in:       make(map[string]map[string]Edge[E]),
+		nodeMeta: make(map[string]*Store),
+		edgeMeta: make(map[string]map[string]*Store),
 	}
 }
 
@@ -85,6 +89,15 @@ func (g *Graph[N, E]) RemoveNode(id string) {
 	delete(g.out, id)
 	delete(g.in, id)
 	delete(g.nodes, id)
+	delete(g.nodeMeta, id)
+	// Clean up edge metadata involving this node.
+	delete(g.edgeMeta, id)
+	for from, m := range g.edgeMeta {
+		delete(m, id)
+		if len(m) == 0 {
+			delete(g.edgeMeta, from)
+		}
+	}
 }
 
 // RemoveEdge removes the edge from -> to.
@@ -94,6 +107,17 @@ func (g *Graph[N, E]) RemoveEdge(from, to string) {
 	if !g.Directed {
 		delete(g.out[to], from)
 		delete(g.in[from], to)
+	}
+	// Clean up edge metadata.
+	f, t := from, to
+	if !g.Directed && t < f {
+		f, t = t, f
+	}
+	if m, ok := g.edgeMeta[f]; ok {
+		delete(m, t)
+		if len(m) == 0 {
+			delete(g.edgeMeta, f)
+		}
 	}
 }
 
@@ -220,5 +244,70 @@ func (g *Graph[N, E]) Copy() *Graph[N, E] {
 			c.in[to][from] = e
 		}
 	}
+	for id, store := range g.nodeMeta {
+		c.nodeMeta[id] = store.Copy()
+	}
+	for from, m := range g.edgeMeta {
+		c.edgeMeta[from] = make(map[string]*Store)
+		for to, store := range m {
+			c.edgeMeta[from][to] = store.Copy()
+		}
+	}
 	return c
+}
+
+// NodeMeta returns the metadata store for the given node, creating it lazily.
+// Returns nil if the node does not exist.
+func (g *Graph[N, E]) NodeMeta(id string) *Store {
+	if !g.HasNode(id) {
+		return nil
+	}
+	if g.nodeMeta[id] == nil {
+		g.nodeMeta[id] = NewStore()
+	}
+	return g.nodeMeta[id]
+}
+
+// EdgeMeta returns the metadata store for the given edge, creating it lazily.
+// Returns nil if the edge does not exist.
+// For undirected graphs, EdgeMeta("a","b") and EdgeMeta("b","a") return the same store.
+func (g *Graph[N, E]) EdgeMeta(from, to string) *Store {
+	if !g.HasEdge(from, to) {
+		return nil
+	}
+	f, t := from, to
+	if !g.Directed && t < f {
+		f, t = t, f
+	}
+	if g.edgeMeta[f] == nil {
+		g.edgeMeta[f] = make(map[string]*Store)
+	}
+	if g.edgeMeta[f][t] == nil {
+		g.edgeMeta[f][t] = NewStore()
+	}
+	return g.edgeMeta[f][t]
+}
+
+// NodeMetaCount returns the number of metadata entries for the given node.
+// Returns 0 if the node doesn't exist or has no metadata store.
+func (g *Graph[N, E]) NodeMetaCount(id string) int {
+	if s, ok := g.nodeMeta[id]; ok {
+		return s.Len()
+	}
+	return 0
+}
+
+// EdgeMetaCount returns the number of metadata entries for the given edge.
+// Returns 0 if the edge doesn't exist or has no metadata store.
+func (g *Graph[N, E]) EdgeMetaCount(from, to string) int {
+	f, t := from, to
+	if !g.Directed && t < f {
+		f, t = t, f
+	}
+	if m, ok := g.edgeMeta[f]; ok {
+		if s, ok := m[t]; ok {
+			return s.Len()
+		}
+	}
+	return 0
 }
