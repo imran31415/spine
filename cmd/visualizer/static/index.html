@@ -6,6 +6,26 @@
 <title>Spine — Graph Visualizer</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/rust.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/java.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/sql.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/ruby.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/kotlin.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/swift.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/scala.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/csharp.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/php.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/lua.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/r.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/dart.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/protobuf.min.js"></script>
 <style>
 :root {
   --bg: #0f1117;
@@ -400,6 +420,51 @@ canvas {
   border: 2px solid;
 }
 
+/* ---- Node Info section ---- */
+#node-info-section { display: none; }
+
+.node-info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.node-info-label {
+  color: var(--text2);
+  min-width: 60px;
+}
+
+.node-info-value {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.node-info-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.node-info-badge.file {
+  background: rgba(108, 123, 255, 0.15);
+  color: var(--accent);
+}
+
+.node-info-badge.directory {
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--green);
+}
+
+.node-info-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+
 /* ---- Metadata section ---- */
 #meta-section { display: none; }
 
@@ -449,6 +514,14 @@ canvas {
   flex-shrink: 0;
 }
 
+.meta-expand-hint {
+  font-size: 9px;
+  color: var(--text2);
+  opacity: 0.6;
+  font-style: italic;
+  flex-shrink: 0;
+}
+
 .meta-del-btn {
   background: none;
   border: none;
@@ -472,6 +545,9 @@ canvas {
   word-break: break-all;
   font-family: 'SF Mono', 'Fira Code', monospace;
   line-height: 1.4;
+  max-height: 2.8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .meta-empty {
@@ -547,6 +623,20 @@ canvas {
   flex-shrink: 0;
 }
 
+.meta-fs-node-label {
+  font-size: 12px;
+  color: var(--text2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.meta-fs-separator {
+  color: var(--text2);
+  font-size: 12px;
+}
+
 .meta-fs-key {
   font-weight: 600;
   font-size: 14px;
@@ -619,8 +709,73 @@ canvas {
 
 /* Override highlight.js background to match our theme */
 .meta-fs-body .hljs {
-  background: transparent;
-  padding: 0;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+.meta-fs-body code.hljs {
+  background: transparent !important;
+  padding: 0 !important;
+  display: block;
+}
+
+/* Ensure hljs span classes are visible inside our viewer */
+.meta-fs-body [class^="hljs-"] {
+  font-family: inherit;
+}
+
+/* Upload section */
+.upload-description {
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.upload-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.option-group {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+
+.option-group-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.upload-option-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+  margin-bottom: 4px;
+  cursor: pointer;
+  flex-wrap: wrap;
+}
+
+.upload-option-label input[type="checkbox"] {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.option-hint {
+  font-size: 10px;
+  color: var(--text2);
+  width: 100%;
+  padding-left: 20px;
+  margin-top: -2px;
 }
 
 /* Extension filter chips */
@@ -766,24 +921,51 @@ canvas {
 
   <div class="section">
     <div class="section-title">Directory Upload</div>
-    <button class="primary full-width" id="dir-upload-btn">Upload Directory</button>
-    <label style="font-size:12px;color:var(--text2);margin-top:6px;display:flex;align-items:center;gap:6px">
-      <input type="checkbox" id="dir-include-content" checked> Include file contents
-    </label>
-    <div style="margin-top:8px">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Filter by extension</div>
-      <div class="row">
-        <input id="ext-input" placeholder=".go, .py, .js ...">
-        <button class="btn-sm" id="ext-add-btn">Add</button>
+    <div class="upload-description">Upload a local directory to visualize as a file tree graph. Configure filters below before uploading.</div>
+
+    <div class="upload-options">
+      <div class="option-group">
+        <div class="option-group-title">File Types</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Only include files matching these extensions (leave empty for all files)</div>
+        <div class="row">
+          <input id="ext-input" placeholder=".go, .py, .js ...">
+          <button class="btn-sm" id="ext-add-btn">Add</button>
+        </div>
+        <div class="ext-presets">
+          <button data-preset="code">Code</button>
+          <button data-preset="config">Config</button>
+          <button data-preset="docs">Docs</button>
+          <button id="ext-clear-btn">Clear</button>
+        </div>
+        <div class="ext-chip-container" id="ext-chips"></div>
       </div>
-      <div class="ext-presets">
-        <button data-preset="code">Code</button>
-        <button data-preset="config">Config</button>
-        <button data-preset="docs">Docs</button>
-        <button id="ext-clear-btn">Clear</button>
+
+      <div class="option-group">
+        <div class="option-group-title">Options</div>
+        <label class="upload-option-label">
+          <input type="checkbox" id="dir-include-content" checked>
+          <span>Include file contents</span>
+          <span class="option-hint">Enables syntax-highlighted code viewer</span>
+        </label>
+        <label class="upload-option-label">
+          <input type="checkbox" id="dir-skip-hidden" checked>
+          <span>Skip hidden files/dirs</span>
+          <span class="option-hint">Ignore files starting with . (e.g. .git)</span>
+        </label>
+        <div class="row" style="align-items:center;margin-top:4px">
+          <span style="font-size:11px;color:var(--text2);white-space:nowrap">Max file size</span>
+          <select id="dir-max-size" style="flex:1">
+            <option value="10240">10 KB</option>
+            <option value="51200">50 KB</option>
+            <option value="102400" selected>100 KB</option>
+            <option value="524288">512 KB</option>
+            <option value="1048576">1 MB</option>
+          </select>
+        </div>
       </div>
-      <div class="ext-chip-container" id="ext-chips"></div>
     </div>
+
+    <button class="primary full-width" id="dir-upload-btn" style="margin-top:8px">Upload Directory</button>
     <div id="dir-progress" style="display:none;margin-top:8px">
       <div class="progress-bar"><div class="progress-fill" id="dir-progress-fill"></div></div>
       <div style="font-size:11px;color:var(--text2)" id="dir-progress-text">Reading files...</div>
@@ -841,6 +1023,11 @@ canvas {
       </div>
     </div>
     <button class="danger full-width" id="reset-all-btn">Reset All</button>
+  </div>
+
+  <div class="section" id="node-info-section" style="display:none">
+    <div class="section-title">Selected Node</div>
+    <div id="node-info-content"></div>
   </div>
 
   <div class="section" id="meta-section">
@@ -922,6 +1109,8 @@ canvas {
 <div id="meta-fullscreen">
   <div class="meta-fs-panel">
     <div class="meta-fs-header">
+      <span class="meta-fs-node-label" id="meta-fs-node-label"></span>
+      <span class="meta-fs-separator">/</span>
       <span class="meta-fs-key">key</span>
       <span class="meta-fs-type">str</span>
       <button class="meta-fs-close">&times;</button>
@@ -1612,13 +1801,17 @@ function inferType(value) {
   return 'any';
 }
 
-function formatValue(value) {
+function formatValue(value, maxLen) {
+  maxLen = maxLen || 50;
   if (value === null || value === undefined) return 'null';
-  if (typeof value === 'string') return '"' + value + '"';
+  if (typeof value === 'string') {
+    if (value.length > maxLen) return '"' + value.substring(0, maxLen) + '..."';
+    return '"' + value + '"';
+  }
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   if (typeof value === 'object') {
     const s = JSON.stringify(value);
-    return s.length > 80 ? s.substring(0, 77) + '...' : s;
+    return s.length > maxLen ? s.substring(0, maxLen - 3) + '...' : s;
   }
   return String(value);
 }
@@ -1646,18 +1839,87 @@ async function fetchEdgeMeta(from, to, offset) {
 }
 
 function updateMetaPanel() {
+  const nodeInfoSection = $('node-info-section');
   if (selected && selected.type === 'node') {
     dom.metaSection.style.display = 'block';
     const n = findNode(selected.id);
     dom.metaTargetLabel.innerHTML = 'Node: <strong>' + esc(n ? (n.label || n.id) : selected.id) + '</strong>';
     fetchNodeMeta(selected.id, 0);
+    // Show node info section with quick actions
+    updateNodeInfoSection(selected.id);
   } else if (selected && selected.type === 'edge') {
     dom.metaSection.style.display = 'block';
     dom.metaTargetLabel.innerHTML = 'Edge: <strong>' + esc(selected.from) + ' \u2192 ' + esc(selected.to) + '</strong>';
     fetchEdgeMeta(selected.from, selected.to, 0);
+    nodeInfoSection.style.display = 'none';
   } else {
     dom.metaSection.style.display = 'none';
+    nodeInfoSection.style.display = 'none';
     metaState = { items: [], total: 0, offset: 0, hasMore: false };
+  }
+}
+
+async function updateNodeInfoSection(nodeId) {
+  const nodeInfoSection = $('node-info-section');
+  const nodeInfoContent = $('node-info-content');
+  const n = findNode(nodeId);
+  if (!n) {
+    nodeInfoSection.style.display = 'none';
+    return;
+  }
+
+  // Fetch all metadata to build the info panel
+  let items;
+  try {
+    const data = await api('/api/node/meta', { id: nodeId, offset: 0, limit: 100 });
+    items = data.items || [];
+  } catch(e) {
+    items = [];
+  }
+
+  const getMeta = (key) => {
+    const item = items.find(i => i.key === key);
+    return item ? item.value : null;
+  };
+
+  const nodeType = getMeta('type');
+  const extension = getMeta('extension');
+  const language = getMeta('language');
+  const size = getMeta('size');
+  const hasContent = items.some(i => i.key === 'content');
+
+  let html = '';
+  html += '<div class="node-info-row"><span class="node-info-label">ID</span><span class="node-info-value">' + esc(n.id) + '</span></div>';
+
+  if (nodeType) {
+    const badgeClass = nodeType === 'directory' ? 'directory' : 'file';
+    html += '<div class="node-info-row"><span class="node-info-label">Type</span><span class="node-info-badge ' + badgeClass + '">' + esc(nodeType) + '</span></div>';
+  }
+
+  if (language) {
+    html += '<div class="node-info-row"><span class="node-info-label">Language</span><span class="node-info-value">' + esc(String(language)) + '</span></div>';
+  }
+
+  if (size !== null && size !== undefined) {
+    const sizeStr = size > 1024 ? (size / 1024).toFixed(1) + ' KB' : size + ' B';
+    html += '<div class="node-info-row"><span class="node-info-label">Size</span><span class="node-info-value">' + sizeStr + '</span></div>';
+  }
+
+  // Quick action: View content if available
+  if (hasContent) {
+    html += '<div class="node-info-actions"><button class="primary btn-sm" id="view-content-btn">View Code</button></div>';
+  }
+
+  nodeInfoContent.innerHTML = html;
+  nodeInfoSection.style.display = items.length > 0 ? 'block' : 'none';
+
+  // Wire up view content button
+  const viewBtn = $('view-content-btn');
+  if (viewBtn) {
+    viewBtn.addEventListener('click', () => {
+      const contentItem = items.find(i => i.key === 'content');
+      if (contentItem) openMetaFullscreen('content', contentItem.value);
+    });
   }
 }
 
@@ -1672,11 +1934,14 @@ function renderMetaEntries() {
   let html = '';
   for (const item of metaState.items) {
     const typeTag = inferType(item.value);
-    const displayVal = formatValue(item.value);
-    html += `<div class="meta-entry">
+    const displayVal = formatValue(item.value, 50);
+    const isLong = (typeof item.value === 'string' && item.value.length > 50) ||
+                   (typeof item.value === 'object' && JSON.stringify(item.value).length > 50);
+    html += `<div class="meta-entry" title="Click to expand">
       <div class="meta-entry-header">
         <span class="meta-key">${esc(item.key)}</span>
         <span class="meta-type">${typeTag}</span>
+        ${isLong ? '<span class="meta-expand-hint">click to expand</span>' : ''}
         <button class="meta-del-btn" data-key="${esc(item.key)}">\u00d7</button>
       </div>
       <div class="meta-value">${esc(displayVal)}</div>
@@ -1863,6 +2128,8 @@ async function handleDirectoryUpload(e) {
   if (!files || files.length === 0) return;
 
   const includeContent = $('dir-include-content').checked;
+  const skipHidden = $('dir-skip-hidden').checked;
+  const maxContentSize = parseInt($('dir-max-size').value) || MAX_CONTENT_SIZE;
   const progressDiv = $('dir-progress');
   const progressFill = $('dir-progress-fill');
   const progressText = $('dir-progress-text');
@@ -1885,6 +2152,13 @@ async function handleDirectoryUpload(e) {
 
     // Path without root prefix (rootName/rest/of/path).
     const parts = relPath.split('/');
+
+    // Skip hidden files/directories if option is checked
+    if (skipHidden) {
+      const hasHidden = parts.slice(1).some(p => p.startsWith('.'));
+      if (hasHidden) continue;
+    }
+
     // Build intermediate directory paths.
     for (let i = 1; i < parts.length - 1; i++) {
       dirSet.add(parts.slice(1, i + 1).join('/'));
@@ -1913,7 +2187,7 @@ async function handleDirectoryUpload(e) {
     const batch = fileEntries.slice(i, i + BATCH_SIZE);
     const results = await Promise.all(batch.map(async ({ file, path, name }) => {
       const entry = { path, name, isDir: false, size: file.size };
-      if (includeContent && !isBinaryFile(name) && file.size <= MAX_CONTENT_SIZE) {
+      if (includeContent && !isBinaryFile(name) && file.size <= maxContentSize) {
         try {
           entry.content = await file.text();
         } catch (err) {
@@ -2383,6 +2657,7 @@ fetchGraph();
 fetchTemplates();
 // ---- Fullscreen Metadata Viewer ----
 const metaFS = document.getElementById('meta-fullscreen');
+const metaFSNodeLabel = document.getElementById('meta-fs-node-label');
 const metaFSKey = metaFS.querySelector('.meta-fs-key');
 const metaFSType = metaFS.querySelector('.meta-fs-type');
 const metaFSCode = document.getElementById('meta-fs-code');
@@ -2413,17 +2688,32 @@ const LANG_NAME_MAP = {
   'dart': 'dart', 'elixir': 'elixir', 'erlang': 'erlang', 'haskell': 'haskell',
 };
 
+// Cache for all metadata items (not just current page) for language detection
+let allMetaItemsCache = { nodeId: null, items: [] };
+
+async function fetchAllMetaForLang(nodeId) {
+  if (allMetaItemsCache.nodeId === nodeId) return allMetaItemsCache.items;
+  try {
+    const data = await api('/api/node/meta', { id: nodeId, offset: 0, limit: 100 });
+    allMetaItemsCache = { nodeId, items: data.items || [] };
+    return allMetaItemsCache.items;
+  } catch(e) {
+    return metaState.items;
+  }
+}
+
 // Resolve highlight.js language from metadata context
-function resolveHighlightLang() {
+function resolveHighlightLang(allItems) {
+  const items = allItems || metaState.items;
   // 1. Check metadata items for "extension" field (e.g. ".go")
-  for (const item of metaState.items) {
+  for (const item of items) {
     if (item.key === 'extension' && typeof item.value === 'string') {
       const lang = EXT_LANG_MAP[item.value.toLowerCase()];
       if (lang) return lang;
     }
   }
   // 2. Check metadata items for "language" field (e.g. "Go")
-  for (const item of metaState.items) {
+  for (const item of items) {
     if (item.key === 'language' && typeof item.value === 'string') {
       const lang = LANG_NAME_MAP[item.value.toLowerCase()];
       if (lang) return lang;
@@ -2434,14 +2724,42 @@ function resolveHighlightLang() {
     const ext = (selected.id.match(/(\.[a-zA-Z0-9]+)$/) || [])[1];
     if (ext) return EXT_LANG_MAP[ext.toLowerCase()] || null;
   }
+  // 4. Fall back to selected node label file extension
+  if (selected && selected.type === 'node') {
+    const n = findNode(selected.id);
+    if (n && n.label) {
+      const ext = (n.label.match(/(\.[a-zA-Z0-9]+)$/) || [])[1];
+      if (ext) return EXT_LANG_MAP[ext.toLowerCase()] || null;
+    }
+  }
   return null;
 }
 
-function openMetaFullscreen(key, value) {
+async function openMetaFullscreen(key, value) {
+  // Show the node label in the header
+  if (selected && selected.type === 'node') {
+    const n = findNode(selected.id);
+    metaFSNodeLabel.textContent = n ? (n.label || n.id) : selected.id;
+  } else if (selected && selected.type === 'edge') {
+    metaFSNodeLabel.textContent = selected.from + ' → ' + selected.to;
+  } else {
+    metaFSNodeLabel.textContent = '';
+  }
   metaFSKey.textContent = key;
-  // Detect language from node metadata, then key name as fallback
+
+  // Detect language from key extension, then node metadata
   const keyExt = (key.match(/(\.[a-zA-Z0-9]+)$/) || [])[1];
-  const lang = (keyExt && EXT_LANG_MAP[keyExt.toLowerCase()]) || resolveHighlightLang();
+  let lang = keyExt ? EXT_LANG_MAP[keyExt.toLowerCase()] : null;
+
+  // If no lang from key, fetch all metadata for comprehensive language detection
+  if (!lang && selected && selected.type === 'node') {
+    const allItems = await fetchAllMetaForLang(selected.id);
+    lang = resolveHighlightLang(allItems);
+  }
+  if (!lang) {
+    lang = resolveHighlightLang();
+  }
+
   metaFSType.textContent = lang || inferType(value);
 
   let text;
@@ -2459,12 +2777,41 @@ function openMetaFullscreen(key, value) {
   let highlightedLines;
   if (!isJSON && lang && typeof hljs !== 'undefined') {
     try {
-      const result = hljs.highlight(text, { language: lang, ignoreIllegals: true });
-      highlightedLines = result.value.split('\n');
+      // Check if language is registered
+      const langList = hljs.listLanguages ? hljs.listLanguages() : [];
+      const langAvailable = langList.length === 0 || langList.includes(lang);
+      if (langAvailable) {
+        const result = hljs.highlight(text, { language: lang, ignoreIllegals: true });
+        highlightedLines = result.value.split('\n');
+      } else {
+        // Try auto-detection as fallback
+        const result = hljs.highlightAuto(text);
+        if (result.language) {
+          highlightedLines = result.value.split('\n');
+        }
+      }
     } catch (e) {
-      highlightedLines = null;
+      // Last resort: try auto-detection
+      try {
+        const result = hljs.highlightAuto(text);
+        highlightedLines = result.value.split('\n');
+      } catch (e2) {
+        highlightedLines = null;
+      }
     }
+  } else if (!isJSON && typeof hljs !== 'undefined' && text.length > 20) {
+    // No language detected but content looks like code - try auto-detect
+    try {
+      const result = hljs.highlightAuto(text);
+      if (result.language && result.relevance > 5) {
+        highlightedLines = result.value.split('\n');
+        metaFSType.textContent = result.language;
+      }
+    } catch(e) { /* ignore */ }
   }
+
+  // Add hljs class to the code element for proper theme styling
+  metaFSCode.className = highlightedLines ? 'hljs' : '';
 
   const lines = text.split('\n');
   let html = '';
@@ -2472,7 +2819,7 @@ function openMetaFullscreen(key, value) {
     const num = i + 1;
     let content;
     if (highlightedLines) {
-      content = highlightedLines[i] || ' ';
+      content = highlightedLines[i] !== undefined ? highlightedLines[i] : ' ';
     } else if (isJSON) {
       content = syntaxHighlightJSON(esc(lines[i]));
     } else {

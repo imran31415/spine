@@ -637,6 +637,45 @@ func (s *server) handleLoadPlan(w http.ResponseWriter, r *http.Request) {
 
 // ---- Directory Upload handler ----
 
+// extToLanguage maps file extensions to human-readable language names.
+var extToLanguage = map[string]string{
+	".go":    "Go",
+	".py":    "Python",
+	".js":    "JavaScript",
+	".ts":    "TypeScript",
+	".jsx":   "JavaScript",
+	".tsx":   "TypeScript",
+	".rs":    "Rust",
+	".java":  "Java",
+	".c":     "C",
+	".h":     "C",
+	".cpp":   "C++",
+	".hpp":   "C++",
+	".cs":    "C#",
+	".rb":    "Ruby",
+	".php":   "PHP",
+	".swift": "Swift",
+	".kt":    "Kotlin",
+	".scala": "Scala",
+	".sh":    "Bash",
+	".bash":  "Bash",
+	".sql":   "SQL",
+	".html":  "HTML",
+	".css":   "CSS",
+	".scss":  "SCSS",
+	".json":  "JSON",
+	".yaml":  "YAML",
+	".yml":   "YAML",
+	".toml":  "TOML",
+	".xml":   "XML",
+	".md":    "Markdown",
+	".lua":   "Lua",
+	".r":     "R",
+	".dart":  "Dart",
+	".zig":   "Zig",
+	".proto": "Protobuf",
+}
+
 type dirEntry struct {
 	Path    string `json:"path"`
 	Name    string `json:"name"`
@@ -712,6 +751,10 @@ func (s *server) handleLoadDirectory(w http.ResponseWriter, r *http.Request) {
 			meta.Set("size", e.Size)
 			if ext := filepath.Ext(e.Name); ext != "" {
 				meta.Set("extension", ext) // e.g. ".go", ".py", ".js"
+				// Set language name based on extension for better detection
+				if lang, ok := extToLanguage[strings.ToLower(ext)]; ok {
+					meta.Set("language", lang)
+				}
 			}
 			if e.Content != "" {
 				meta.Set("content", e.Content)
