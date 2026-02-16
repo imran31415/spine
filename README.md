@@ -1,6 +1,8 @@
 # Spine
 
-<img width="800" height="600" alt="image" src="https://github.com/user-attachments/assets/d6ddc7e6-be4a-43c7-a8af-d668a0a42e63" />
+<img width="1512" height="913" alt="image" src="https://github.com/user-attachments/assets/abf30824-e661-4b4c-949c-0f314bd2d397" />
+<img width="1511" height="904" alt="image" src="https://github.com/user-attachments/assets/c31abe0d-3ea2-4cd8-b6d6-58029bda491a" />
+
 
 A generic graph library for Go with zero external dependencies. Supports directed and undirected graphs, traversal algorithms, attribute-based queries, task scheduling with dependency resolution, and an interactive web-based visualizer.
 
