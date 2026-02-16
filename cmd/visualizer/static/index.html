@@ -2387,30 +2387,61 @@ const metaFSKey = metaFS.querySelector('.meta-fs-key');
 const metaFSType = metaFS.querySelector('.meta-fs-type');
 const metaFSCode = document.getElementById('meta-fs-code');
 
-// Map file extensions to highlight.js language names
-function detectLanguage(key) {
-  const ext = (key.match(/\.([a-zA-Z0-9]+)$/) || [])[1];
-  if (!ext) return null;
-  const map = {
-    go: 'go', py: 'python', js: 'javascript', ts: 'typescript',
-    jsx: 'javascript', tsx: 'typescript', rs: 'rust', java: 'java',
-    c: 'c', h: 'c', cpp: 'cpp', hpp: 'cpp', cs: 'csharp',
-    rb: 'ruby', php: 'php', swift: 'swift', kt: 'kotlin',
-    scala: 'scala', sh: 'bash', bash: 'bash', zsh: 'bash',
-    sql: 'sql', html: 'xml', xml: 'xml', css: 'css',
-    scss: 'scss', less: 'less', json: 'json', yaml: 'yaml',
-    yml: 'yaml', toml: 'ini', md: 'markdown', dockerfile: 'dockerfile',
-    tf: 'hcl', proto: 'protobuf', r: 'r', lua: 'lua',
-    zig: 'zig', dart: 'dart', ex: 'elixir', exs: 'elixir',
-    erl: 'erlang', hs: 'haskell', ml: 'ocaml', vim: 'vim',
-    makefile: 'makefile', cmake: 'cmake',
-  };
-  return map[ext.toLowerCase()] || null;
+// Extension-to-highlight.js language map
+const EXT_LANG_MAP = {
+  '.go': 'go', '.py': 'python', '.js': 'javascript', '.ts': 'typescript',
+  '.jsx': 'javascript', '.tsx': 'typescript', '.rs': 'rust', '.java': 'java',
+  '.c': 'c', '.h': 'c', '.cpp': 'cpp', '.hpp': 'cpp', '.cs': 'csharp',
+  '.rb': 'ruby', '.php': 'php', '.swift': 'swift', '.kt': 'kotlin',
+  '.scala': 'scala', '.sh': 'bash', '.bash': 'bash', '.zsh': 'bash',
+  '.sql': 'sql', '.html': 'xml', '.xml': 'xml', '.css': 'css',
+  '.scss': 'scss', '.less': 'less', '.json': 'json', '.yaml': 'yaml',
+  '.yml': 'yaml', '.toml': 'ini', '.md': 'markdown',
+  '.tf': 'hcl', '.proto': 'protobuf', '.r': 'r', '.lua': 'lua',
+  '.zig': 'zig', '.dart': 'dart', '.ex': 'elixir', '.exs': 'elixir',
+  '.erl': 'erlang', '.hs': 'haskell', '.ml': 'ocaml', '.vim': 'vim',
+};
+
+// Language name to highlight.js language map (for metadata "language" field)
+const LANG_NAME_MAP = {
+  'go': 'go', 'python': 'python', 'javascript': 'javascript', 'typescript': 'typescript',
+  'rust': 'rust', 'java': 'java', 'c': 'c', 'c++': 'cpp', 'cpp': 'cpp', 'c#': 'csharp',
+  'ruby': 'ruby', 'php': 'php', 'swift': 'swift', 'kotlin': 'kotlin',
+  'scala': 'scala', 'bash': 'bash', 'shell': 'bash', 'sql': 'sql',
+  'html': 'xml', 'xml': 'xml', 'css': 'css', 'json': 'json',
+  'yaml': 'yaml', 'markdown': 'markdown', 'lua': 'lua', 'r': 'r',
+  'dart': 'dart', 'elixir': 'elixir', 'erlang': 'erlang', 'haskell': 'haskell',
+};
+
+// Resolve highlight.js language from metadata context
+function resolveHighlightLang() {
+  // 1. Check metadata items for "extension" field (e.g. ".go")
+  for (const item of metaState.items) {
+    if (item.key === 'extension' && typeof item.value === 'string') {
+      const lang = EXT_LANG_MAP[item.value.toLowerCase()];
+      if (lang) return lang;
+    }
+  }
+  // 2. Check metadata items for "language" field (e.g. "Go")
+  for (const item of metaState.items) {
+    if (item.key === 'language' && typeof item.value === 'string') {
+      const lang = LANG_NAME_MAP[item.value.toLowerCase()];
+      if (lang) return lang;
+    }
+  }
+  // 3. Fall back to selected node ID file extension
+  if (selected && selected.id) {
+    const ext = (selected.id.match(/(\.[a-zA-Z0-9]+)$/) || [])[1];
+    if (ext) return EXT_LANG_MAP[ext.toLowerCase()] || null;
+  }
+  return null;
 }
 
 function openMetaFullscreen(key, value) {
   metaFSKey.textContent = key;
-  const lang = detectLanguage(key);
+  // Detect language from node metadata, then key name as fallback
+  const keyExt = (key.match(/(\.[a-zA-Z0-9]+)$/) || [])[1];
+  const lang = (keyExt && EXT_LANG_MAP[keyExt.toLowerCase()]) || resolveHighlightLang();
   metaFSType.textContent = lang || inferType(value);
 
   let text;

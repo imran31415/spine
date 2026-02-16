@@ -710,6 +710,9 @@ func (s *server) handleLoadDirectory(w http.ResponseWriter, r *http.Request) {
 			meta := s.graph.NodeMeta(nodeID)
 			meta.Set("type", "file")
 			meta.Set("size", e.Size)
+			if ext := filepath.Ext(e.Name); ext != "" {
+				meta.Set("extension", ext) // e.g. ".go", ".py", ".js"
+			}
 			if e.Content != "" {
 				meta.Set("content", e.Content)
 			}
