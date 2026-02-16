@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 
 	"spine"
@@ -645,8 +646,9 @@ type dirEntry struct {
 }
 
 type loadDirReq struct {
-	RootName string     `json:"rootName"`
-	Entries  []dirEntry `json:"entries"`
+	RootName   string     `json:"rootName"`
+	Entries    []dirEntry `json:"entries"`
+	Extensions []string   `json:"extensions,omitempty"`
 }
 
 func (s *server) handleLoadDirectory(w http.ResponseWriter, r *http.Request) {
@@ -670,12 +672,34 @@ func (s *server) handleLoadDirectory(w http.ResponseWriter, r *http.Request) {
 	s.graph.AddNode(rootID, NodeData{Label: rootID + "/"})
 	s.graph.NodeMeta(rootID).Set("type", "directory")
 
+	// Build extension filter set (lowercase, with leading dot).
+	extSet := make(map[string]bool, len(req.Extensions))
+	for _, ext := range req.Extensions {
+		ext = strings.ToLower(strings.TrimSpace(ext))
+		if ext != "" {
+			if ext[0] != '.' {
+				ext = "." + ext
+			}
+			extSet[ext] = true
+		}
+	}
+	filterActive := len(extSet) > 0
+
 	// Collect unique directories and files from entries.
 	dirs := make(map[string]bool)
 	dirs[rootID] = true
 
 	for _, e := range req.Entries {
 		nodeID := e.Path
+
+		// When filtering, skip files whose extension doesn't match.
+		if filterActive && !e.IsDir {
+			ext := strings.ToLower(filepath.Ext(e.Name))
+			if !extSet[ext] {
+				continue
+			}
+		}
+
 		if e.IsDir {
 			dirs[nodeID] = true
 			s.graph.AddNode(nodeID, NodeData{Label: e.Name + "/"})
@@ -703,6 +727,28 @@ func (s *server) handleLoadDirectory(w http.ResponseWriter, r *http.Request) {
 			dirs[parent] = true
 		}
 		s.graph.AddEdge(parent, nodeID, EdgeData{}, 1)
+	}
+
+	// When filtering, prune directory nodes that have no children (empty after filtering).
+	if filterActive {
+		changed := true
+		for changed {
+			changed = false
+			for _, n := range s.graph.Nodes() {
+				if n.ID == rootID {
+					continue
+				}
+				if !dirs[n.ID] {
+					continue
+				}
+				// A directory with no outgoing edges has no children.
+				if len(s.graph.OutEdges(n.ID)) == 0 {
+					s.graph.RemoveNode(n.ID)
+					delete(dirs, n.ID)
+					changed = true
+				}
+			}
+		}
 	}
 
 	// Compute tree layout: group nodes by depth (number of '/' separators).
