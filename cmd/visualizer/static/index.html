@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Spine — Graph Visualizer</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <style>
 :root {
   --bg: #0f1117;
@@ -615,6 +617,56 @@ canvas {
 .syn-num { color: var(--text); }
 .syn-bool, .syn-null { color: var(--red); }
 
+/* Override highlight.js background to match our theme */
+.meta-fs-body .hljs {
+  background: transparent;
+  padding: 0;
+}
+
+/* Extension filter chips */
+.ext-chip-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 6px 0;
+  min-height: 0;
+}
+
+.ext-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--accent2);
+  color: #fff;
+  font-size: 11px;
+  padding: 2px 6px 2px 8px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.ext-chip-x {
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.7;
+  padding: 0 2px;
+}
+
+.ext-chip-x:hover { opacity: 1; }
+
+.ext-presets {
+  display: flex;
+  gap: 4px;
+  margin: 4px 0;
+  flex-wrap: wrap;
+}
+
+.ext-presets button {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
 /* Mobile: hamburger toggle (hidden on desktop) */
 #menu-toggle {
   display: none;
@@ -718,6 +770,20 @@ canvas {
     <label style="font-size:12px;color:var(--text2);margin-top:6px;display:flex;align-items:center;gap:6px">
       <input type="checkbox" id="dir-include-content" checked> Include file contents
     </label>
+    <div style="margin-top:8px">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Filter by extension</div>
+      <div class="row">
+        <input id="ext-input" placeholder=".go, .py, .js ...">
+        <button class="btn-sm" id="ext-add-btn">Add</button>
+      </div>
+      <div class="ext-presets">
+        <button data-preset="code">Code</button>
+        <button data-preset="config">Config</button>
+        <button data-preset="docs">Docs</button>
+        <button id="ext-clear-btn">Clear</button>
+      </div>
+      <div class="ext-chip-container" id="ext-chips"></div>
+    </div>
     <div id="dir-progress" style="display:none;margin-top:8px">
       <div class="progress-bar"><div class="progress-fill" id="dir-progress-fill"></div></div>
       <div style="font-size:11px;color:var(--text2)" id="dir-progress-text">Reading files...</div>
@@ -1707,6 +1773,72 @@ function metaNextPage() {
   }
 }
 
+// ---- Extension Filter ----
+const activeExtensions = new Set();
+
+const EXT_PRESETS = {
+  code: ['.go', '.py', '.js', '.ts', '.java', '.c', '.cpp', '.rs', '.rb', '.jsx', '.tsx', '.cs', '.swift', '.kt', '.scala', '.sh', '.bash', '.pl', '.php', '.lua', '.zig', '.hs'],
+  config: ['.json', '.yaml', '.yml', '.toml', '.xml', '.env', '.ini', '.cfg', '.conf', '.properties'],
+  docs: ['.md', '.txt', '.rst', '.adoc', '.tex'],
+};
+
+function addExtension(ext) {
+  ext = ext.trim().toLowerCase();
+  if (!ext) return;
+  if (ext[0] !== '.') ext = '.' + ext;
+  if (activeExtensions.has(ext)) return;
+  activeExtensions.add(ext);
+  renderExtChips();
+}
+
+function removeExtension(ext) {
+  activeExtensions.delete(ext);
+  renderExtChips();
+}
+
+function renderExtChips() {
+  const container = $('ext-chips');
+  if (activeExtensions.size === 0) {
+    container.innerHTML = '';
+    return;
+  }
+  let html = '';
+  for (const ext of activeExtensions) {
+    html += `<span class="ext-chip">${esc(ext)}<span class="ext-chip-x" data-ext="${esc(ext)}">&times;</span></span>`;
+  }
+  container.innerHTML = html;
+  container.querySelectorAll('.ext-chip-x').forEach(el => {
+    el.addEventListener('click', () => removeExtension(el.dataset.ext));
+  });
+}
+
+function addExtensionsFromInput() {
+  const input = $('ext-input');
+  const raw = input.value;
+  if (!raw.trim()) return;
+  // Split on commas, spaces, or both
+  const parts = raw.split(/[,\s]+/);
+  for (const p of parts) addExtension(p);
+  input.value = '';
+}
+
+$('ext-add-btn').addEventListener('click', addExtensionsFromInput);
+$('ext-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); addExtensionsFromInput(); }
+});
+
+document.querySelector('.ext-presets').addEventListener('click', (e) => {
+  const preset = e.target.dataset.preset;
+  if (preset && EXT_PRESETS[preset]) {
+    for (const ext of EXT_PRESETS[preset]) addExtension(ext);
+  }
+});
+
+$('ext-clear-btn').addEventListener('click', () => {
+  activeExtensions.clear();
+  renderExtChips();
+});
+
 // ---- Directory Upload ----
 const BINARY_EXTENSIONS = new Set([
   '.png','.jpg','.jpeg','.gif','.bmp','.ico','.webp','.svg',
@@ -1808,7 +1940,8 @@ async function handleDirectoryUpload(e) {
   progressFill.style.width = '100%';
 
   try {
-    const data = await api('/api/directory/load', { rootName, entries });
+    const extensions = activeExtensions.size > 0 ? Array.from(activeExtensions) : [];
+    const data = await api('/api/directory/load', { rootName, entries, extensions });
     selected = null;
     edgeStart = null;
     showMode('');
@@ -2254,9 +2387,31 @@ const metaFSKey = metaFS.querySelector('.meta-fs-key');
 const metaFSType = metaFS.querySelector('.meta-fs-type');
 const metaFSCode = document.getElementById('meta-fs-code');
 
+// Map file extensions to highlight.js language names
+function detectLanguage(key) {
+  const ext = (key.match(/\.([a-zA-Z0-9]+)$/) || [])[1];
+  if (!ext) return null;
+  const map = {
+    go: 'go', py: 'python', js: 'javascript', ts: 'typescript',
+    jsx: 'javascript', tsx: 'typescript', rs: 'rust', java: 'java',
+    c: 'c', h: 'c', cpp: 'cpp', hpp: 'cpp', cs: 'csharp',
+    rb: 'ruby', php: 'php', swift: 'swift', kt: 'kotlin',
+    scala: 'scala', sh: 'bash', bash: 'bash', zsh: 'bash',
+    sql: 'sql', html: 'xml', xml: 'xml', css: 'css',
+    scss: 'scss', less: 'less', json: 'json', yaml: 'yaml',
+    yml: 'yaml', toml: 'ini', md: 'markdown', dockerfile: 'dockerfile',
+    tf: 'hcl', proto: 'protobuf', r: 'r', lua: 'lua',
+    zig: 'zig', dart: 'dart', ex: 'elixir', exs: 'elixir',
+    erl: 'erlang', hs: 'haskell', ml: 'ocaml', vim: 'vim',
+    makefile: 'makefile', cmake: 'cmake',
+  };
+  return map[ext.toLowerCase()] || null;
+}
+
 function openMetaFullscreen(key, value) {
   metaFSKey.textContent = key;
-  metaFSType.textContent = inferType(value);
+  const lang = detectLanguage(key);
+  metaFSType.textContent = lang || inferType(value);
 
   let text;
   if (typeof value === 'string') {
@@ -2267,14 +2422,27 @@ function openMetaFullscreen(key, value) {
     text = JSON.stringify(value, null, 2);
   }
 
-  const lines = text.split('\n');
   const isJSON = typeof value === 'object' && value !== null;
 
+  // Use highlight.js for code files (when hljs is available and language detected)
+  let highlightedLines;
+  if (!isJSON && lang && typeof hljs !== 'undefined') {
+    try {
+      const result = hljs.highlight(text, { language: lang, ignoreIllegals: true });
+      highlightedLines = result.value.split('\n');
+    } catch (e) {
+      highlightedLines = null;
+    }
+  }
+
+  const lines = text.split('\n');
   let html = '';
   for (let i = 0; i < lines.length; i++) {
     const num = i + 1;
     let content;
-    if (isJSON) {
+    if (highlightedLines) {
+      content = highlightedLines[i] || ' ';
+    } else if (isJSON) {
       content = syntaxHighlightJSON(esc(lines[i]));
     } else {
       content = esc(lines[i]) || ' ';
