@@ -508,6 +508,113 @@ canvas {
   margin: 8px 0 6px;
 }
 
+.meta-entry { cursor: pointer; transition: border-color 0.15s; }
+.meta-entry:hover { border-color: var(--accent); }
+
+/* ---- Fullscreen Metadata Viewer ---- */
+#meta-fullscreen {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0,0,0,0.65);
+  align-items: center;
+  justify-content: center;
+}
+#meta-fullscreen.visible { display: flex; }
+
+.meta-fs-panel {
+  width: 90vw;
+  height: 90vh;
+  background: #12141c;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.meta-fs-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.meta-fs-key {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta-fs-type {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--border);
+  color: var(--text2);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.meta-fs-close {
+  background: none;
+  border: none;
+  color: var(--text2);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.meta-fs-close:hover { color: var(--red); background: none; border: none; }
+
+.meta-fs-body {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+}
+
+.meta-fs-body pre {
+  margin: 0;
+  padding: 16px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  counter-reset: line;
+}
+
+.meta-fs-body .line-row {
+  display: block;
+}
+
+.meta-fs-body .line-num {
+  display: inline-block;
+  width: 48px;
+  text-align: right;
+  padding-right: 16px;
+  color: var(--text2);
+  opacity: 0.4;
+  user-select: none;
+  font-size: 12px;
+}
+
+.meta-fs-body .line-content {
+  white-space: pre;
+}
+
+/* Syntax highlight classes */
+.syn-key { color: var(--accent); }
+.syn-str { color: var(--green); }
+.syn-num { color: var(--text); }
+.syn-bool, .syn-null { color: var(--red); }
+
 /* Mobile: hamburger toggle (hidden on desktop) */
 #menu-toggle {
   display: none;
@@ -603,6 +710,19 @@ canvas {
       <button id="import-btn" style="flex:1">Import JSON</button>
     </div>
     <input type="file" id="import-file" accept=".json" style="display:none">
+  </div>
+
+  <div class="section">
+    <div class="section-title">Directory Upload</div>
+    <button class="primary full-width" id="dir-upload-btn">Upload Directory</button>
+    <label style="font-size:12px;color:var(--text2);margin-top:6px;display:flex;align-items:center;gap:6px">
+      <input type="checkbox" id="dir-include-content" checked> Include file contents
+    </label>
+    <div id="dir-progress" style="display:none;margin-top:8px">
+      <div class="progress-bar"><div class="progress-fill" id="dir-progress-fill"></div></div>
+      <div style="font-size:11px;color:var(--text2)" id="dir-progress-text">Reading files...</div>
+    </div>
+    <input type="file" id="dir-upload-file" webkitdirectory style="display:none">
   </div>
 
   <div class="section">
@@ -730,6 +850,17 @@ canvas {
     <div class="legend-row"><div class="legend-dot" style="background:#1a1d40;border-color:#6c7bff"></div> Ready</div>
     <div class="legend-row"><div class="legend-dot" style="background:#3a3020;border-color:#fbbf24"></div> Running</div>
     <div class="legend-row"><div class="legend-dot" style="background:#1a3a30;border-color:#34d399"></div> Done</div>
+  </div>
+</div>
+
+<div id="meta-fullscreen">
+  <div class="meta-fs-panel">
+    <div class="meta-fs-header">
+      <span class="meta-fs-key">key</span>
+      <span class="meta-fs-type">str</span>
+      <button class="meta-fs-close">&times;</button>
+    </div>
+    <div class="meta-fs-body"><pre><code id="meta-fs-code"></code></pre></div>
   </div>
 </div>
 
@@ -1489,7 +1620,15 @@ function renderMetaEntries() {
 
   // Wire delete buttons
   container.querySelectorAll('.meta-del-btn').forEach(btn => {
-    btn.addEventListener('click', () => deleteMeta(btn.dataset.key));
+    btn.addEventListener('click', (e) => { e.stopPropagation(); deleteMeta(btn.dataset.key); });
+  });
+
+  // Wire click-to-fullscreen on each entry
+  container.querySelectorAll('.meta-entry').forEach((el, idx) => {
+    el.addEventListener('click', () => {
+      const item = metaState.items[idx];
+      if (item) openMetaFullscreen(item.key, item.value);
+    });
   });
 
   // Pagination
@@ -1566,6 +1705,130 @@ function metaNextPage() {
   } else if (selected && selected.type === 'edge') {
     fetchEdgeMeta(selected.from, selected.to, newOffset);
   }
+}
+
+// ---- Directory Upload ----
+const BINARY_EXTENSIONS = new Set([
+  '.png','.jpg','.jpeg','.gif','.bmp','.ico','.webp','.svg',
+  '.woff','.woff2','.ttf','.eot','.otf',
+  '.zip','.gz','.tar','.bz2','.7z','.rar','.xz',
+  '.exe','.dll','.so','.dylib','.bin','.obj','.o','.a',
+  '.pdf','.doc','.docx','.xls','.xlsx','.ppt','.pptx',
+  '.mp3','.mp4','.avi','.mov','.mkv','.wav','.flac','.ogg','.webm',
+  '.class','.pyc','.pyo','.wasm',
+  '.db','.sqlite','.sqlite3',
+]);
+const MAX_CONTENT_SIZE = 100 * 1024; // 100KB
+
+function isBinaryFile(name) {
+  const dot = name.lastIndexOf('.');
+  if (dot === -1) return false;
+  return BINARY_EXTENSIONS.has(name.substring(dot).toLowerCase());
+}
+
+async function handleDirectoryUpload(e) {
+  const files = e.target.files;
+  if (!files || files.length === 0) return;
+
+  const includeContent = $('dir-include-content').checked;
+  const progressDiv = $('dir-progress');
+  const progressFill = $('dir-progress-fill');
+  const progressText = $('dir-progress-text');
+
+  progressDiv.style.display = 'block';
+  progressFill.style.width = '0%';
+  progressText.textContent = `Processing ${files.length} files...`;
+
+  // Determine root name from the first file's relative path.
+  const firstPath = files[0].webkitRelativePath || '';
+  const rootName = firstPath.split('/')[0] || 'directory';
+
+  // Collect unique directories and file entries.
+  const dirSet = new Set();
+  const fileEntries = [];
+
+  for (const file of files) {
+    const relPath = file.webkitRelativePath;
+    if (!relPath) continue;
+
+    // Path without root prefix (rootName/rest/of/path).
+    const parts = relPath.split('/');
+    // Build intermediate directory paths.
+    for (let i = 1; i < parts.length - 1; i++) {
+      dirSet.add(parts.slice(1, i + 1).join('/'));
+    }
+    // File path relative to root.
+    const filePath = parts.slice(1).join('/');
+    if (filePath) {
+      fileEntries.push({ file, path: filePath, name: parts[parts.length - 1] });
+    }
+  }
+
+  // Build entries array for the API.
+  const entries = [];
+
+  // Add directory entries.
+  for (const dirPath of dirSet) {
+    const dirName = dirPath.split('/').pop();
+    entries.push({ path: dirPath, name: dirName, isDir: true, size: 0 });
+  }
+
+  // Read file contents in batches for efficiency.
+  const BATCH_SIZE = 20;
+  let processed = 0;
+
+  for (let i = 0; i < fileEntries.length; i += BATCH_SIZE) {
+    const batch = fileEntries.slice(i, i + BATCH_SIZE);
+    const results = await Promise.all(batch.map(async ({ file, path, name }) => {
+      const entry = { path, name, isDir: false, size: file.size };
+      if (includeContent && !isBinaryFile(name) && file.size <= MAX_CONTENT_SIZE) {
+        try {
+          entry.content = await file.text();
+        } catch (err) {
+          // Skip unreadable files.
+        }
+      }
+      return entry;
+    }));
+
+    entries.push(...results);
+    processed += batch.length;
+
+    const pct = Math.round((processed / fileEntries.length) * 100);
+    progressFill.style.width = pct + '%';
+    progressText.textContent = `Reading files... ${processed}/${fileEntries.length}`;
+
+    // Yield to UI thread between batches.
+    if (i + BATCH_SIZE < fileEntries.length) {
+      await new Promise(r => setTimeout(r, 0));
+    }
+  }
+
+  progressText.textContent = 'Uploading to server...';
+  progressFill.style.width = '100%';
+
+  try {
+    const data = await api('/api/directory/load', { rootName, entries });
+    selected = null;
+    edgeStart = null;
+    showMode('');
+    syncState(data);
+    dom.directedToggle.checked = data.directed;
+    clearResult();
+    updateMetaPanel();
+    nodeCounter = 0;
+    syncNodeCounter();
+    closeSidebarIfMobile();
+  } catch (err) {
+    console.error('Directory upload failed:', err);
+    progressText.textContent = 'Upload failed: ' + err.message;
+    setTimeout(() => { progressDiv.style.display = 'none'; }, 3000);
+    e.target.value = '';
+    return;
+  }
+
+  progressDiv.style.display = 'none';
+  e.target.value = '';
 }
 
 // ---- Export / Import ----
@@ -1888,6 +2151,10 @@ function onKeyDown(e) {
   if (e.target.tagName === 'INPUT') return;
 
   if (e.key === 'Escape') {
+    if (metaFS.classList.contains('visible')) {
+      closeMetaFullscreen();
+      return;
+    }
     selected = null;
     edgeStart = null;
     showMode('');
@@ -1934,6 +2201,10 @@ dom.exportBtn.addEventListener('click', exportGraph);
 dom.importBtn.addEventListener('click', () => dom.importFile.click());
 dom.importFile.addEventListener('change', handleImportFile);
 
+// Directory upload
+$('dir-upload-btn').addEventListener('click', () => $('dir-upload-file').click());
+$('dir-upload-file').addEventListener('change', handleDirectoryUpload);
+
 // Templates
 dom.templateSelect.addEventListener('change', onTemplateSelect);
 dom.loadTemplateBtn.addEventListener('click', loadTemplate);
@@ -1977,6 +2248,66 @@ window.addEventListener('resize', resize);
 resize();
 fetchGraph();
 fetchTemplates();
+// ---- Fullscreen Metadata Viewer ----
+const metaFS = document.getElementById('meta-fullscreen');
+const metaFSKey = metaFS.querySelector('.meta-fs-key');
+const metaFSType = metaFS.querySelector('.meta-fs-type');
+const metaFSCode = document.getElementById('meta-fs-code');
+
+function openMetaFullscreen(key, value) {
+  metaFSKey.textContent = key;
+  metaFSType.textContent = inferType(value);
+
+  let text;
+  if (typeof value === 'string') {
+    text = value;
+  } else if (value === null || value === undefined) {
+    text = 'null';
+  } else {
+    text = JSON.stringify(value, null, 2);
+  }
+
+  const lines = text.split('\n');
+  const isJSON = typeof value === 'object' && value !== null;
+
+  let html = '';
+  for (let i = 0; i < lines.length; i++) {
+    const num = i + 1;
+    let content;
+    if (isJSON) {
+      content = syntaxHighlightJSON(esc(lines[i]));
+    } else {
+      content = esc(lines[i]) || ' ';
+    }
+    html += '<span class="line-row"><span class="line-num">' + num + '</span><span class="line-content">' + content + '</span>\n</span>';
+  }
+  metaFSCode.innerHTML = html;
+  metaFS.classList.add('visible');
+}
+
+function syntaxHighlightJSON(line) {
+  // Highlight JSON keys: "key":
+  line = line.replace(/^(\s*)(&quot;[^&]*?&quot;)(\s*:)/g, '$1<span class="syn-key">$2</span>$3');
+  // Highlight string values (after colon)
+  line = line.replace(/(:\s*)(&quot;[^&]*?&quot;)/g, '$1<span class="syn-str">$2</span>');
+  // Highlight standalone strings in arrays
+  line = line.replace(/([\[,]\s*)(&quot;[^&]*?&quot;)/g, '$1<span class="syn-str">$2</span>');
+  // Highlight numbers
+  line = line.replace(/(:\s*)(-?\d+\.?\d*)/g, '$1<span class="syn-num">$2</span>');
+  // Highlight booleans and null
+  line = line.replace(/(:\s*)(true|false|null)/g, '$1<span class="syn-bool">$2</span>');
+  return line;
+}
+
+function closeMetaFullscreen() {
+  metaFS.classList.remove('visible');
+}
+
+metaFS.querySelector('.meta-fs-close').addEventListener('click', closeMetaFullscreen);
+metaFS.addEventListener('click', function(e) {
+  if (e.target === metaFS) closeMetaFullscreen();
+});
+
 </script>
 </body>
 </html>
