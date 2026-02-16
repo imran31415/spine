@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"spine"
+	"github.com/imran31415/spine"
 )
 
 // matchesFilters returns true if the node passes all filters (AND logic).

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"spine"
+	"github.com/imran31415/spine"
 )
 
 //go:embed static/index.html

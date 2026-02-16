@@ -9,7 +9,7 @@ import (
 	"io"
 	"log"
 
-	"spine/api"
+	"github.com/imran31415/spine/api"
 )
 
 // JSON-RPC 2.0 types.

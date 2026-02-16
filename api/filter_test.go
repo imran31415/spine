@@ -1,7 +1,7 @@
 package api
 
 import (
-	"spine"
+	"github.com/imran31415/spine"
 	"testing"
 )
 

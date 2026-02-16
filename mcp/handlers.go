@@ -3,7 +3,7 @@ package mcp
 import (
 	"encoding/json"
 
-	"spine/api"
+	"github.com/imran31415/spine/api"
 )
 
 type nameArg struct {

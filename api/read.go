@@ -3,7 +3,7 @@ package api
 import (
 	"sort"
 
-	"spine"
+	"github.com/imran31415/spine"
 )
 
 const defaultLimit = 100
