@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
 	"sync"
 
 	"spine"
@@ -631,6 +634,123 @@ func (s *server) handleLoadPlan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.buildGraphResp(nil))
 }
 
+// ---- Directory Upload handler ----
+
+type dirEntry struct {
+	Path    string `json:"path"`
+	Name    string `json:"name"`
+	IsDir   bool   `json:"isDir"`
+	Size    int64  `json:"size"`
+	Content string `json:"content,omitempty"`
+}
+
+type loadDirReq struct {
+	RootName string     `json:"rootName"`
+	Entries  []dirEntry `json:"entries"`
+}
+
+func (s *server) handleLoadDirectory(w http.ResponseWriter, r *http.Request) {
+	var req loadDirReq
+	if err := readJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	if req.RootName == "" {
+		req.RootName = "root"
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.graph = spine.NewGraph[NodeData, EdgeData](true)
+	s.positions = make(map[string]Position)
+
+	// Add root node.
+	rootID := req.RootName
+	s.graph.AddNode(rootID, NodeData{Label: rootID + "/"})
+	s.graph.NodeMeta(rootID).Set("type", "directory")
+
+	// Collect unique directories and files from entries.
+	dirs := make(map[string]bool)
+	dirs[rootID] = true
+
+	for _, e := range req.Entries {
+		nodeID := e.Path
+		if e.IsDir {
+			dirs[nodeID] = true
+			s.graph.AddNode(nodeID, NodeData{Label: e.Name + "/"})
+			meta := s.graph.NodeMeta(nodeID)
+			meta.Set("type", "directory")
+		} else {
+			s.graph.AddNode(nodeID, NodeData{Label: e.Name})
+			meta := s.graph.NodeMeta(nodeID)
+			meta.Set("type", "file")
+			meta.Set("size", e.Size)
+			if e.Content != "" {
+				meta.Set("content", e.Content)
+			}
+		}
+
+		// Build parent edge. Parent is filepath.Dir(path) or rootName if top-level.
+		parent := filepath.Dir(nodeID)
+		if parent == "." || parent == "" {
+			parent = rootID
+		}
+		// Ensure parent directory nodes exist in the graph.
+		if !s.graph.HasNode(parent) {
+			s.graph.AddNode(parent, NodeData{Label: filepath.Base(parent) + "/"})
+			s.graph.NodeMeta(parent).Set("type", "directory")
+			dirs[parent] = true
+		}
+		s.graph.AddEdge(parent, nodeID, EdgeData{}, 1)
+	}
+
+	// Compute tree layout: group nodes by depth (number of '/' separators).
+	type nodeDepth struct {
+		id    string
+		depth int
+	}
+	var allNodes []nodeDepth
+	for _, n := range s.graph.Nodes() {
+		d := 0
+		if n.ID != rootID {
+			for _, c := range n.ID {
+				if c == '/' {
+					d++
+				}
+			}
+			// Files/dirs at top level under root still have depth 1.
+			d++ // +1 because root is depth 0
+		}
+		allNodes = append(allNodes, nodeDepth{id: n.ID, depth: d})
+	}
+
+	// Group by depth level.
+	levels := make(map[int][]string)
+	maxLevel := 0
+	for _, nd := range allNodes {
+		levels[nd.depth] = append(levels[nd.depth], nd.id)
+		if nd.depth > maxLevel {
+			maxLevel = nd.depth
+		}
+	}
+
+	// Assign positions: center each level horizontally.
+	for level := 0; level <= maxLevel; level++ {
+		ids := levels[level]
+		totalWidth := float64(len(ids)-1) * 200
+		startX := 400 - totalWidth/2
+		for i, id := range ids {
+			s.positions[id] = Position{
+				X: startX + float64(i)*200,
+				Y: 80 + float64(level)*150,
+			}
+		}
+	}
+
+	writeJSON(w, s.buildGraphResp(nil))
+}
+
 func (s *server) handleClear(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -859,7 +979,71 @@ func (s *server) handleEdgeMetaDelete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.buildGraphResp(nil))
 }
 
+// enrichCodebaseTemplate reads actual source files from disk and injects their
+// content as metadata into the "codebase" template nodes.
+func enrichCodebaseTemplate() {
+	// Find repo root relative to this source file's location.
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		return
+	}
+	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(thisFile)))
+
+	// Map node IDs to file paths relative to repo root.
+	fileMap := map[string]string{
+		"graph.go":          "graph.go",
+		"traverse.go":       "traverse.go",
+		"query.go":          "query.go",
+		"task.go":           "task.go",
+		"store.go":          "store.go",
+		"serialize.go":      "serialize.go",
+		"doc.go":            "doc.go",
+		"go.mod":            "go.mod",
+		"Makefile":          "Makefile",
+		".gitignore":        ".gitignore",
+		"README.md":         "README.md",
+		"main.go":           "cmd/visualizer/main.go",
+		"templates.go":      "cmd/visualizer/templates.go",
+		"graph_test.go":     "graph_test.go",
+		"traverse_test.go":  "traverse_test.go",
+		"query_test.go":     "query_test.go",
+		"task_test.go":      "task_test.go",
+		"store_test.go":     "store_test.go",
+		"serialize_test.go": "serialize_test.go",
+		"meta_test.go":      "meta_test.go",
+	}
+
+	// Find the codebase template.
+	var tmpl *Template
+	for i := range templates {
+		if templates[i].ID == "codebase" {
+			tmpl = &templates[i]
+			break
+		}
+	}
+	if tmpl == nil {
+		return
+	}
+
+	for i := range tmpl.Nodes {
+		relPath, ok := fileMap[tmpl.Nodes[i].ID]
+		if !ok {
+			continue
+		}
+		fullPath := filepath.Join(repoRoot, relPath)
+		data, err := os.ReadFile(fullPath)
+		if err != nil {
+			continue
+		}
+		if tmpl.Nodes[i].Meta == nil {
+			tmpl.Nodes[i].Meta = make(map[string]any)
+		}
+		tmpl.Nodes[i].Meta["content"] = string(data)
+	}
+}
+
 func main() {
+	enrichCodebaseTemplate()
 	s := newServer(true)
 
 	mux := http.NewServeMux()
@@ -889,6 +1073,7 @@ func main() {
 	mux.HandleFunc("/api/algo", s.handleAlgo)
 	mux.HandleFunc("/api/node/status", s.handleUpdateNodeStatus)
 	mux.HandleFunc("/api/plan/load", s.handleLoadPlan)
+	mux.HandleFunc("/api/directory/load", s.handleLoadDirectory)
 
 	// Export/Import API routes.
 	mux.HandleFunc("/api/graph/export", s.handleExport)
