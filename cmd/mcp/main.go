@@ -7,8 +7,8 @@ import (
 	"log"
 	"os"
 
-	"spine/api"
-	"spine/mcp"
+	"github.com/imran31415/spine/api"
+	"github.com/imran31415/spine/mcp"
 )
 
 func main() {

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"spine"
+	"github.com/imran31415/spine"
 )
 
 // Manager provides the high-level API for managing named spine graphs.

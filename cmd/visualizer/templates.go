@@ -323,7 +323,7 @@ var templates = []Template{
 		Directed:    true,
 		Nodes: []templateNode{
 			// Root
-			{ID: "spine", Label: "spine/", X: 450, Y: 30, Meta: map[string]any{
+			{ID: "github.com/imran31415/spine", Label: "github.com/imran31415/spine/", X: 450, Y: 30, Meta: map[string]any{
 				"type": "directory", "description": "Root of the spine graph library",
 				"total_files": 20, "language": "Go",
 			}},
@@ -397,7 +397,7 @@ var templates = []Template{
 			{ID: "go.mod", Label: "go.mod", X: 230, Y: 440, Meta: map[string]any{
 				"type": "file", "language": "Go Module", "lines": 3, "bytes": 22,
 				"description": "Go module definition — zero external dependencies",
-				"module": "spine", "go_version": "1.22",
+				"module": "github.com/imran31415/spine", "go_version": "1.22",
 			}},
 			{ID: "Makefile", Label: "Makefile", X: 380, Y: 440, Meta: map[string]any{
 				"type": "file", "language": "Make", "lines": 9, "bytes": 112,
@@ -444,28 +444,28 @@ var templates = []Template{
 		},
 		Edges: []templateEdge{
 			// Root -> top-level source files
-			{From: "spine", To: "graph.go", Label: "contains", Weight: 1},
-			{From: "spine", To: "traverse.go", Label: "contains", Weight: 1},
-			{From: "spine", To: "query.go", Label: "contains", Weight: 1},
-			{From: "spine", To: "task.go", Label: "contains", Weight: 1},
-			{From: "spine", To: "store.go", Label: "contains", Weight: 1},
-			{From: "spine", To: "serialize.go", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: "graph.go", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: "traverse.go", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: "query.go", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: "task.go", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: "store.go", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: "serialize.go", Label: "contains", Weight: 1},
 			// Root -> test files
-			{From: "spine", To: "graph_test.go", Label: "contains", Weight: 1},
-			{From: "spine", To: "traverse_test.go", Label: "contains", Weight: 1},
-			{From: "spine", To: "query_test.go", Label: "contains", Weight: 1},
-			{From: "spine", To: "task_test.go", Label: "contains", Weight: 1},
-			{From: "spine", To: "store_test.go", Label: "contains", Weight: 1},
-			{From: "spine", To: "serialize_test.go", Label: "contains", Weight: 1},
-			{From: "spine", To: "meta_test.go", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: "graph_test.go", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: "traverse_test.go", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: "query_test.go", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: "task_test.go", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: "store_test.go", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: "serialize_test.go", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: "meta_test.go", Label: "contains", Weight: 1},
 			// Root -> config/docs
-			{From: "spine", To: "go.mod", Label: "contains", Weight: 1},
-			{From: "spine", To: "Makefile", Label: "contains", Weight: 1},
-			{From: "spine", To: "README.md", Label: "contains", Weight: 1},
-			{From: "spine", To: "doc.go", Label: "contains", Weight: 1},
-			{From: "spine", To: ".gitignore", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: "go.mod", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: "Makefile", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: "README.md", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: "doc.go", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: ".gitignore", Label: "contains", Weight: 1},
 			// Root -> cmd directory
-			{From: "spine", To: "cmd", Label: "contains", Weight: 1},
+			{From: "github.com/imran31415/spine", To: "cmd", Label: "contains", Weight: 1},
 			// cmd -> visualizer
 			{From: "cmd", To: "visualizer", Label: "contains", Weight: 1},
 			// visualizer -> its files

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"spine/api"
+	"github.com/imran31415/spine/api"
 )
 
 func tempDir(t *testing.T) string {

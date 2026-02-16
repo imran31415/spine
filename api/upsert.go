@@ -1,6 +1,6 @@
 package api
 
-import "spine"
+import "github.com/imran31415/spine"
 
 // Upsert performs a batch of idempotent node and edge create/update operations.
 func (m *Manager) Upsert(req UpsertRequest) (*UpsertResult, error) {
