@@ -911,6 +911,19 @@ canvas {
   </div>
 
   <div class="section">
+    <div class="section-title">Layout & View</div>
+    <div class="row">
+      <button class="primary" id="auto-layout-btn" style="flex:1">Auto Layout</button>
+      <button id="fit-view-btn" style="flex:1">Fit to View</button>
+    </div>
+    <div class="row">
+      <button id="zoom-in-btn" style="flex:1">Zoom In</button>
+      <button id="zoom-out-btn" style="flex:1">Zoom Out</button>
+      <button id="reset-view-btn" style="flex:1">Reset</button>
+    </div>
+  </div>
+
+  <div class="section">
     <div class="section-title">Import / Export</div>
     <div class="row">
       <button class="primary" id="export-btn" style="flex:1">Export JSON</button>
@@ -1080,6 +1093,8 @@ canvas {
       <kbd>Double-click</kbd> canvas to add node<br>
       <kbd>Click</kbd> node then another to add edge<br>
       <kbd>Drag</kbd> node to reposition<br>
+      <kbd>Scroll</kbd> to zoom &middot; <kbd>Right-drag</kbd> to pan<br>
+      <kbd>F</kbd> fit &middot; <kbd>+</kbd>/<kbd>-</kbd> zoom &middot; <kbd>0</kbd> reset<br>
       <kbd>Delete</kbd> / <kbd>Backspace</kbd> to remove selected<br>
       <kbd>Esc</kbd> to cancel / deselect
     </span>
@@ -1087,6 +1102,7 @@ canvas {
       Double-tap to add node<br>
       Long-press node to start edge<br>
       Drag to reposition<br>
+      Pinch to zoom &middot; Two-finger pan<br>
       Tap to select
     </span>
   </div>
@@ -1130,6 +1146,18 @@ let hoveredEdge = null;
 let animStep = 0;          // for animated result highlighting
 let animTimer = null;
 let nodeCounter = 0;
+
+// ---- Viewport (pan & zoom) ----
+let viewOffsetX = 0;
+let viewOffsetY = 0;
+let viewScale = 1;
+const MIN_SCALE = 0.1;
+const MAX_SCALE = 5;
+let isPanning = false;
+let panStartX = 0;
+let panStartY = 0;
+let panStartOffsetX = 0;
+let panStartOffsetY = 0;
 
 const NODE_RADIUS = 22;
 const COLORS = ['#6c7bff', '#34d399', '#f472b6', '#fbbf24', '#22d3ee', '#a78bfa', '#fb923c', '#4ade80'];
@@ -1212,6 +1240,17 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s; re
 
 function canvasCoords(e) {
   const rect = canvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left;
+  const sy = e.clientY - rect.top;
+  return { x: (sx - viewOffsetX) / viewScale, y: (sy - viewOffsetY) / viewScale };
+}
+
+function screenCoords(wx, wy) {
+  return { x: wx * viewScale + viewOffsetX, y: wy * viewScale + viewOffsetY };
+}
+
+function rawCanvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
   return { x: e.clientX - rect.left, y: e.clientY - rect.top };
 }
 
@@ -1226,9 +1265,10 @@ function buildNodeTooltipHTML(nodeId) {
 }
 
 function positionTooltip(x, y) {
+  const s = screenCoords(x, y);
   tooltip.style.display = 'block';
-  tooltip.style.left = (x + 14) + 'px';
-  tooltip.style.top = (y - 10) + 'px';
+  tooltip.style.left = (s.x + 14) + 'px';
+  tooltip.style.top = (s.y - 10) + 'px';
 }
 
 function showMode(text) {
@@ -1375,7 +1415,6 @@ function resize() {
   const r = dpr();
   canvas.width = dom.canvasWrap.clientWidth * r;
   canvas.height = dom.canvasWrap.clientHeight * r;
-  ctx.setTransform(r, 0, 0, r, 0, 0);
   render();
 }
 
@@ -1413,11 +1452,13 @@ function getNodePos(id) {
 function drawGrid(w, h) {
   ctx.strokeStyle = '#1a1d27';
   ctx.lineWidth = 1;
-  const gridSize = 40;
-  for (let x = 0; x < w; x += gridSize) {
+  const gridSize = 40 * viewScale;
+  const offX = viewOffsetX % gridSize;
+  const offY = viewOffsetY % gridSize;
+  for (let x = offX; x < w; x += gridSize) {
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
   }
-  for (let y = 0; y < h; y += gridSize) {
+  for (let y = offY; y < h; y += gridSize) {
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
   }
 }
@@ -1599,14 +1640,80 @@ function drawStats(w, h) {
 }
 
 function render() {
-  const w = canvas.width / dpr();
-  const h = canvas.height / dpr();
+  const r = dpr();
+  const w = canvas.width / r;
+  const h = canvas.height / r;
+  ctx.setTransform(r, 0, 0, r, 0, 0);
   ctx.clearRect(0, 0, w, h);
   drawGrid(w, h);
+  // Apply viewport transform for graph content
+  ctx.save();
+  ctx.translate(viewOffsetX, viewOffsetY);
+  ctx.scale(viewScale, viewScale);
   drawEdges();
   drawEdgePreview();
   drawNodes();
+  ctx.restore();
+  // Draw HUD elements in screen space
   drawStats(w, h);
+  drawZoomIndicator(w, h);
+}
+
+function drawZoomIndicator(w, h) {
+  if (viewScale === 1 && viewOffsetX === 0 && viewOffsetY === 0) return;
+  ctx.fillStyle = 'rgba(74, 79, 101, 0.7)';
+  ctx.font = '11px -apple-system, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(`${Math.round(viewScale * 100)}%`, 12, h - 12);
+}
+
+function zoomAt(screenX, screenY, newScale) {
+  newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
+  const worldX = (screenX - viewOffsetX) / viewScale;
+  const worldY = (screenY - viewOffsetY) / viewScale;
+  viewScale = newScale;
+  viewOffsetX = screenX - worldX * viewScale;
+  viewOffsetY = screenY - worldY * viewScale;
+  render();
+}
+
+function fitToView() {
+  if (state.nodes.length === 0) return;
+  const w = canvas.width / dpr();
+  const h = canvas.height / dpr();
+  const pad = 60;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const n of state.nodes) {
+    minX = Math.min(minX, n.x - NODE_RADIUS);
+    minY = Math.min(minY, n.y - NODE_RADIUS);
+    maxX = Math.max(maxX, n.x + NODE_RADIUS);
+    maxY = Math.max(maxY, n.y + NODE_RADIUS);
+  }
+  const gw = maxX - minX;
+  const gh = maxY - minY;
+  if (gw === 0 && gh === 0) {
+    viewScale = 1;
+    viewOffsetX = w / 2 - minX;
+    viewOffsetY = h / 2 - minY;
+    render();
+    return;
+  }
+  const scaleX = (w - pad * 2) / gw;
+  const scaleY = (h - pad * 2) / gh;
+  viewScale = Math.min(scaleX, scaleY, 2);
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  viewOffsetX = w / 2 - cx * viewScale;
+  viewOffsetY = h / 2 - cy * viewScale;
+  render();
+}
+
+function resetView() {
+  viewScale = 1;
+  viewOffsetX = 0;
+  viewOffsetY = 0;
+  render();
 }
 
 function drawArrowArc(cx, cy, r, endAngle, color) {
@@ -2352,6 +2459,32 @@ let mousePos = null;
 let lastClick = 0;
 
 function onMouseDown(e) {
+  // Middle-click or Ctrl+click: start panning
+  if (e.button === 1 || (e.button === 0 && (e.ctrlKey || e.metaKey) && !edgeStart)) {
+    const raw = rawCanvasCoords(e);
+    isPanning = true;
+    panStartX = raw.x;
+    panStartY = raw.y;
+    panStartOffsetX = viewOffsetX;
+    panStartOffsetY = viewOffsetY;
+    canvas.style.cursor = 'grabbing';
+    e.preventDefault();
+    return;
+  }
+
+  // Right-click: also pan
+  if (e.button === 2) {
+    const raw = rawCanvasCoords(e);
+    isPanning = true;
+    panStartX = raw.x;
+    panStartY = raw.y;
+    panStartOffsetX = viewOffsetX;
+    panStartOffsetY = viewOffsetY;
+    canvas.style.cursor = 'grabbing';
+    e.preventDefault();
+    return;
+  }
+
   const pos = canvasCoords(e);
   const now = Date.now();
   const nodeId = hitTestNode(pos.x, pos.y);
@@ -2372,6 +2505,14 @@ function onMouseDown(e) {
 }
 
 function onMouseMove(e) {
+  if (isPanning) {
+    const raw = rawCanvasCoords(e);
+    viewOffsetX = panStartOffsetX + (raw.x - panStartX);
+    viewOffsetY = panStartOffsetY + (raw.y - panStartY);
+    render();
+    return;
+  }
+
   const pos = canvasCoords(e);
   mousePos = pos;
 
@@ -2416,7 +2557,12 @@ function onMouseMove(e) {
   canvas.style.cursor = nodeId ? 'grab' : edge ? 'pointer' : edgeStart ? 'crosshair' : 'default';
 }
 
-function onMouseUp() {
+function onMouseUp(e) {
+  if (isPanning) {
+    isPanning = false;
+    canvas.style.cursor = 'default';
+    return;
+  }
   if (dragging) {
     const n = findNode(dragging.id);
     if (n) updateNodePos(dragging.id, n.x, n.y);
@@ -2429,7 +2575,15 @@ function onMouseLeave() {
   hoveredNode = null;
   hoveredEdge = null;
   mousePos = null;
+  if (isPanning) { isPanning = false; }
   render();
+}
+
+function onWheel(e) {
+  e.preventDefault();
+  const raw = rawCanvasCoords(e);
+  const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+  zoomAt(raw.x, raw.y, viewScale * zoomFactor);
 }
 
 // ---- Event Handlers: Touch ----
@@ -2441,6 +2595,15 @@ let touchDragging = false;
 let longPressTimer = null;
 let lastTapTime = 0;
 let tooltipTimer = null;
+let pinchStartDist = 0;
+let pinchStartScale = 1;
+let pinchMidX = 0;
+let pinchMidY = 0;
+let touchPanning = false;
+let touchPanStartX = 0;
+let touchPanStartY = 0;
+let touchPanStartOffsetX = 0;
+let touchPanStartOffsetY = 0;
 
 function showNodeTooltip(nodeId, pos) {
   const html = buildNodeTooltipHTML(nodeId);
@@ -2451,9 +2614,32 @@ function showNodeTooltip(nodeId, pos) {
   tooltipTimer = setTimeout(() => { tooltip.style.display = 'none'; }, 2000);
 }
 
+function touchDist(t1, t2) {
+  const dx = t1.clientX - t2.clientX;
+  const dy = t1.clientY - t2.clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
 function onTouchStart(e) {
   if (dom.sidebar.classList.contains('open')) return;
   e.preventDefault();
+
+  // Two-finger: pinch zoom + pan
+  if (e.touches.length === 2) {
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    pinchStartDist = touchDist(e.touches[0], e.touches[1]);
+    pinchStartScale = viewScale;
+    const rect = canvas.getBoundingClientRect();
+    pinchMidX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+    pinchMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+    touchPanning = true;
+    touchPanStartX = pinchMidX;
+    touchPanStartY = pinchMidY;
+    touchPanStartOffsetX = viewOffsetX;
+    touchPanStartOffsetY = viewOffsetY;
+    return;
+  }
+
   const pos = canvasCoords(e.touches[0]);
   touchStartTime = Date.now();
   touchStartPos = pos;
@@ -2466,7 +2652,6 @@ function onTouchStart(e) {
   if (touchNodeId) {
     longPressTimer = setTimeout(() => {
       if (!touchMoved && touchNodeId) {
-        // Long press: enter edge creation mode
         edgeStart = touchNodeId;
         selected = { type: 'node', id: touchNodeId };
         showMode('Edge mode: tap target node');
@@ -2480,19 +2665,36 @@ function onTouchStart(e) {
 function onTouchMove(e) {
   if (dom.sidebar.classList.contains('open')) return;
   e.preventDefault();
+
+  // Two-finger pinch zoom + pan
+  if (e.touches.length === 2 && pinchStartDist > 0) {
+    const dist = touchDist(e.touches[0], e.touches[1]);
+    const rect = canvas.getBoundingClientRect();
+    const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+    const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+    const newScale = pinchStartScale * (dist / pinchStartDist);
+    zoomAt(pinchMidX, pinchMidY, newScale);
+    // Also pan with the midpoint movement
+    viewOffsetX += midX - touchPanStartX;
+    viewOffsetY += midY - touchPanStartY;
+    touchPanStartX = midX;
+    touchPanStartY = midY;
+    render();
+    return;
+  }
+
   const pos = canvasCoords(e.touches[0]);
 
   if (!touchMoved && touchStartPos) {
     const dx = pos.x - touchStartPos.x;
     const dy = pos.y - touchStartPos.y;
-    if (dx * dx + dy * dy > 100) { // 10px threshold
+    if (dx * dx + dy * dy > 100) {
       touchMoved = true;
       if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
     }
   }
 
   if (touchMoved && touchNodeId && !edgeStart) {
-    // Drag node
     touchDragging = true;
     const n = findNode(touchNodeId);
     if (n) {
@@ -2502,7 +2704,6 @@ function onTouchMove(e) {
     }
   }
 
-  // Update mousePos for edge preview line
   if (edgeStart) {
     mousePos = pos;
     render();
@@ -2512,12 +2713,19 @@ function onTouchMove(e) {
 function onTouchEnd(e) {
   if (dom.sidebar.classList.contains('open')) return;
   e.preventDefault();
+
+  // Reset pinch state
+  if (e.touches.length < 2) {
+    pinchStartDist = 0;
+    touchPanning = false;
+  }
+  if (e.touches.length > 0) return; // still touching
+
   if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
 
   const pos = touchStartPos;
   if (!pos) return;
 
-  // If we were dragging, finalize position
   if (touchDragging && touchNodeId) {
     const n = findNode(touchNodeId);
     if (n) updateNodePos(touchNodeId, n.x, n.y);
@@ -2527,17 +2735,14 @@ function onTouchEnd(e) {
     return;
   }
 
-  // Only process taps (not drags, not long-press)
   if (touchMoved) { touchStartPos = null; return; }
 
   const elapsed = Date.now() - touchStartTime;
-  // Ignore if long-press already triggered edge mode
   if (elapsed >= 500 && edgeStart) { touchStartPos = null; return; }
 
   const now = Date.now();
   const nodeId = hitTestNode(pos.x, pos.y, TOUCH_NODE_RADIUS);
 
-  // Double-tap detection
   if (now - lastTapTime < 300 && !nodeId) {
     addNodeAtPos(pos.x, pos.y);
     lastTapTime = 0;
@@ -2585,6 +2790,300 @@ function onKeyDown(e) {
     showMode('Edge mode: click target node');
     render();
   }
+
+  // Zoom controls
+  const w = canvas.width / dpr();
+  const h = canvas.height / dpr();
+  if (e.key === '=' || e.key === '+') { zoomAt(w / 2, h / 2, viewScale * 1.2); }
+  if (e.key === '-') { zoomAt(w / 2, h / 2, viewScale / 1.2); }
+  if (e.key === '0') { resetView(); }
+  if (e.key === 'f' || e.key === 'F') { fitToView(); }
+}
+
+// ---- Auto Layout (Force-Directed) ----
+function autoLayout() {
+  if (state.nodes.length === 0) return;
+
+  const nodes = state.nodes;
+  const edges = state.edges;
+  const n = nodes.length;
+
+  // Build adjacency for hierarchy detection
+  const childrenOf = {};
+  const parentOf = {};
+  const inDeg = {};
+  const outDeg = {};
+  for (const nd of nodes) {
+    childrenOf[nd.id] = [];
+    parentOf[nd.id] = [];
+    inDeg[nd.id] = 0;
+    outDeg[nd.id] = 0;
+  }
+  for (const e of edges) {
+    if (childrenOf[e.from]) childrenOf[e.from].push(e.to);
+    if (parentOf[e.to]) parentOf[e.to].push(e.from);
+    inDeg[e.to] = (inDeg[e.to] || 0) + 1;
+    outDeg[e.from] = (outDeg[e.from] || 0) + 1;
+  }
+
+  // Detect if this is a DAG — use hierarchical layout if so
+  const isDAG = state.directed && !hasCycleQuick(nodes, edges);
+
+  if (isDAG && edges.length > 0) {
+    hierarchicalLayout(nodes, edges, childrenOf, inDeg);
+  } else {
+    forceDirectedLayout(nodes, edges);
+  }
+
+  // Persist all positions
+  for (const nd of nodes) {
+    updateNodePos(nd.id, nd.x, nd.y);
+  }
+  fitToView();
+}
+
+function hasCycleQuick(nodes, edges) {
+  const visited = new Set();
+  const inStack = new Set();
+  const adj = {};
+  for (const nd of nodes) adj[nd.id] = [];
+  for (const e of edges) {
+    if (adj[e.from]) adj[e.from].push(e.to);
+  }
+  function dfs(id) {
+    visited.add(id);
+    inStack.add(id);
+    for (const next of (adj[id] || [])) {
+      if (inStack.has(next)) return true;
+      if (!visited.has(next) && dfs(next)) return true;
+    }
+    inStack.delete(id);
+    return false;
+  }
+  for (const nd of nodes) {
+    if (!visited.has(nd.id) && dfs(nd.id)) return true;
+  }
+  return false;
+}
+
+function hierarchicalLayout(nodes, edges, childrenOf, inDeg) {
+  // Compute depth (longest path from a root) using topological ordering
+  const depth = {};
+  const roots = nodes.filter(nd => (inDeg[nd.id] || 0) === 0);
+  if (roots.length === 0) {
+    // Fallback: all same depth, use force layout
+    forceDirectedLayout(nodes, edges);
+    return;
+  }
+
+  // BFS to assign depths
+  const queue = [];
+  for (const r of roots) { depth[r.id] = 0; queue.push(r.id); }
+  // Also initialize any unvisited nodes
+  for (const nd of nodes) { if (depth[nd.id] === undefined) depth[nd.id] = 0; }
+
+  // Use longest-path for depth assignment (better for DAGs)
+  let changed = true;
+  let iterations = 0;
+  while (changed && iterations < nodes.length + 1) {
+    changed = false;
+    iterations++;
+    for (const e of edges) {
+      const newDepth = (depth[e.from] || 0) + 1;
+      if (newDepth > (depth[e.to] || 0)) {
+        depth[e.to] = newDepth;
+        changed = true;
+      }
+    }
+  }
+
+  // Group nodes by depth level
+  const levels = {};
+  let maxDepth = 0;
+  for (const nd of nodes) {
+    const d = depth[nd.id] || 0;
+    if (!levels[d]) levels[d] = [];
+    levels[d].push(nd);
+    maxDepth = Math.max(maxDepth, d);
+  }
+
+  // Layout: horizontal spacing per level, vertical spacing between levels
+  const levelSpacing = 120;
+  const nodeSpacing = Math.max(80, Math.min(160, 1200 / (nodes.length + 1)));
+
+  // Sort nodes within each level to minimize edge crossings (barycenter heuristic)
+  for (let iter = 0; iter < 4; iter++) {
+    for (let d = 1; d <= maxDepth; d++) {
+      if (!levels[d]) continue;
+      for (const nd of levels[d]) {
+        const parents = edges.filter(e => e.to === nd.id).map(e => e.from);
+        if (parents.length > 0) {
+          const parentPositions = parents.map(pid => {
+            const pLevel = levels[depth[pid] || 0];
+            return pLevel ? pLevel.indexOf(nodes.find(x => x.id === pid)) : 0;
+          });
+          nd._bary = parentPositions.reduce((a, b) => a + b, 0) / parentPositions.length;
+        }
+      }
+      levels[d].sort((a, b) => (a._bary || 0) - (b._bary || 0));
+    }
+  }
+
+  // Assign positions
+  for (let d = 0; d <= maxDepth; d++) {
+    if (!levels[d]) continue;
+    const nodesAtLevel = levels[d];
+    const totalWidth = (nodesAtLevel.length - 1) * nodeSpacing;
+    const startX = -totalWidth / 2;
+    for (let i = 0; i < nodesAtLevel.length; i++) {
+      nodesAtLevel[i].x = startX + i * nodeSpacing;
+      nodesAtLevel[i].y = d * levelSpacing;
+    }
+  }
+
+  // Clean up temp properties
+  for (const nd of nodes) delete nd._bary;
+}
+
+function forceDirectedLayout(nodes, edges) {
+  const n = nodes.length;
+  if (n === 0) return;
+
+  // Build index map for O(1) lookup
+  const idxMap = {};
+  for (let i = 0; i < n; i++) idxMap[nodes[i].id] = i;
+
+  // Pre-compute edge indices
+  const edgeIndices = [];
+  for (const e of edges) {
+    const i = idxMap[e.from];
+    const j = idxMap[e.to];
+    if (i !== undefined && j !== undefined) edgeIndices.push([i, j]);
+  }
+
+  // Initialize positions in a circle
+  const cx = 400, cy = 300;
+  const initRadius = Math.max(80, Math.sqrt(n) * 30);
+  for (let i = 0; i < n; i++) {
+    const angle = (2 * Math.PI * i) / n;
+    nodes[i].x = cx + initRadius * Math.cos(angle);
+    nodes[i].y = cy + initRadius * Math.sin(angle);
+  }
+
+  // Force-directed simulation
+  const idealDist = Math.max(80, Math.min(150, 800 / Math.sqrt(n)));
+  const iterations = Math.min(500, 100 + n * 3);
+  let temperature = idealDist * 0.5;
+  const cooling = temperature / (iterations + 1);
+
+  const vx = new Float64Array(n);
+  const vy = new Float64Array(n);
+
+  for (let iter = 0; iter < iterations; iter++) {
+    vx.fill(0);
+    vy.fill(0);
+
+    // Repulsive forces — use grid approximation for large graphs
+    if (n > 200) {
+      applyGridRepulsion(nodes, vx, vy, idealDist);
+    } else {
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          let dx = nodes[j].x - nodes[i].x;
+          let dy = nodes[j].y - nodes[i].y;
+          let dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 1) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; dist = 1; }
+          const force = (idealDist * idealDist) / dist;
+          const fx = (dx / dist) * force;
+          const fy = (dy / dist) * force;
+          vx[i] -= fx;
+          vy[i] -= fy;
+          vx[j] += fx;
+          vy[j] += fy;
+        }
+      }
+    }
+
+    // Attractive forces (edges) — O(1) index lookup
+    for (const [i, j] of edgeIndices) {
+      let dx = nodes[j].x - nodes[i].x;
+      let dy = nodes[j].y - nodes[i].y;
+      let dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 1) dist = 1;
+      const force = (dist * dist) / idealDist * 1.2;
+      const fx = (dx / dist) * force;
+      const fy = (dy / dist) * force;
+      vx[i] += fx;
+      vy[i] += fy;
+      vx[j] -= fx;
+      vy[j] -= fy;
+    }
+
+    // Center gravity (pull toward center to prevent drift)
+    let gcx = 0, gcy = 0;
+    for (let i = 0; i < n; i++) { gcx += nodes[i].x; gcy += nodes[i].y; }
+    gcx /= n; gcy /= n;
+    const gravity = 0.05;
+    for (let i = 0; i < n; i++) {
+      vx[i] -= (nodes[i].x - gcx) * gravity;
+      vy[i] -= (nodes[i].y - gcy) * gravity;
+    }
+
+    // Apply with temperature clamping
+    for (let i = 0; i < n; i++) {
+      const len = Math.sqrt(vx[i] * vx[i] + vy[i] * vy[i]);
+      if (len > 0) {
+        const capped = Math.min(len, temperature);
+        nodes[i].x += (vx[i] / len) * capped;
+        nodes[i].y += (vy[i] / len) * capped;
+      }
+    }
+
+    temperature -= cooling;
+    if (temperature < 0.1) break;
+  }
+}
+
+function applyGridRepulsion(nodes, vx, vy, idealDist) {
+  // Spatial grid for O(n) approximate repulsion
+  const cellSize = idealDist * 2;
+  const grid = {};
+  const n = nodes.length;
+
+  for (let i = 0; i < n; i++) {
+    const cx = Math.floor(nodes[i].x / cellSize);
+    const cy = Math.floor(nodes[i].y / cellSize);
+    const key = cx + ',' + cy;
+    if (!grid[key]) grid[key] = [];
+    grid[key].push(i);
+  }
+
+  for (let i = 0; i < n; i++) {
+    const cx = Math.floor(nodes[i].x / cellSize);
+    const cy = Math.floor(nodes[i].y / cellSize);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const key = (cx + dx) + ',' + (cy + dy);
+        const cell = grid[key];
+        if (!cell) continue;
+        for (const j of cell) {
+          if (j <= i) continue;
+          let ddx = nodes[j].x - nodes[i].x;
+          let ddy = nodes[j].y - nodes[i].y;
+          let dist = Math.sqrt(ddx * ddx + ddy * ddy);
+          if (dist < 1) { ddx = Math.random() - 0.5; ddy = Math.random() - 0.5; dist = 1; }
+          if (dist > cellSize * 2) continue;
+          const force = (idealDist * idealDist) / dist;
+          const fx = (ddx / dist) * force;
+          const fy = (ddy / dist) * force;
+          vx[i] -= fx;
+          vy[i] -= fy;
+          vx[j] += fx;
+          vy[j] += fy;
+        }
+      }
+    }
+  }
 }
 
 // ---- Event Bindings ----
@@ -2629,6 +3128,19 @@ $('meta-add-btn').addEventListener('click', addMeta);
 dom.metaPrevBtn.addEventListener('click', metaPrevPage);
 dom.metaNextBtn.addEventListener('click', metaNextPage);
 
+// Layout & View controls
+$('auto-layout-btn').addEventListener('click', () => { autoLayout(); closeSidebarIfMobile(); });
+$('fit-view-btn').addEventListener('click', () => { fitToView(); closeSidebarIfMobile(); });
+$('zoom-in-btn').addEventListener('click', () => {
+  const w = canvas.width / dpr(), h = canvas.height / dpr();
+  zoomAt(w / 2, h / 2, viewScale * 1.3);
+});
+$('zoom-out-btn').addEventListener('click', () => {
+  const w = canvas.width / dpr(), h = canvas.height / dpr();
+  zoomAt(w / 2, h / 2, viewScale / 1.3);
+});
+$('reset-view-btn').addEventListener('click', resetView);
+
 // Algorithms (event delegation)
 document.querySelector('.algo-grid').addEventListener('click', (e) => {
   const algo = e.target.dataset.algo;
@@ -2643,6 +3155,8 @@ canvas.addEventListener('mousedown', onMouseDown);
 canvas.addEventListener('mousemove', onMouseMove);
 canvas.addEventListener('mouseup', onMouseUp);
 canvas.addEventListener('mouseleave', onMouseLeave);
+canvas.addEventListener('wheel', onWheel, { passive: false });
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('touchstart', onTouchStart, { passive: false });
 canvas.addEventListener('touchmove', onTouchMove, { passive: false });
 canvas.addEventListener('touchend', onTouchEnd, { passive: false });

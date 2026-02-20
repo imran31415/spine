@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -1134,7 +1135,116 @@ func enrichCodebaseTemplate() {
 	}
 }
 
+var graphDir string
+
+// handleListFiles lists saved graph JSON files in the configured directory.
+func (s *server) handleListFiles(w http.ResponseWriter, r *http.Request) {
+	if graphDir == "" {
+		writeJSON(w, []string{})
+		return
+	}
+	entries, err := os.ReadDir(graphDir)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	var names []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
+			names = append(names, strings.TrimSuffix(e.Name(), ".json"))
+		}
+	}
+	writeJSON(w, names)
+}
+
+// handleLoadFile loads a saved graph file from the configured directory into the visualizer.
+func (s *server) handleLoadFile(w http.ResponseWriter, r *http.Request) {
+	if graphDir == "" {
+		http.Error(w, "no graph directory configured (use -dir flag)", 400)
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	if req.Name == "" {
+		http.Error(w, "name is required", 400)
+		return
+	}
+
+	// Sanitize: only allow simple names, no path traversal.
+	if strings.Contains(req.Name, "/") || strings.Contains(req.Name, "\\") || req.Name == ".." {
+		http.Error(w, "invalid graph name", 400)
+		return
+	}
+
+	path := filepath.Join(graphDir, req.Name+".json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.Error(w, "graph not found", 404)
+		} else {
+			http.Error(w, err.Error(), 500)
+		}
+		return
+	}
+
+	g, err := spine.Unmarshal[NodeData, EdgeData](data)
+	if err != nil {
+		http.Error(w, "failed to parse graph: "+err.Error(), 400)
+		return
+	}
+
+	// Fix up node data that may have been decoded as map[string]any.
+	for _, n := range g.Nodes() {
+		switch d := any(n.Data).(type) {
+		case map[string]any:
+			nd := NodeData{}
+			if l, ok := d["label"]; ok {
+				nd.Label, _ = l.(string)
+			}
+			if st, ok := d["status"]; ok {
+				nd.Status, _ = st.(string)
+			}
+			g.AddNode(n.ID, nd)
+		}
+	}
+	for _, e := range g.Edges() {
+		switch d := any(e.Data).(type) {
+		case map[string]any:
+			ed := EdgeData{}
+			if l, ok := d["label"]; ok {
+				ed.Label, _ = l.(string)
+			}
+			_ = g.AddEdge(e.From, e.To, ed, e.Weight)
+		}
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.graph = g
+	s.positions = make(map[string]Position)
+
+	// Auto-layout: grid layout since saved graphs don't have positions.
+	nodes := s.graph.Nodes()
+	for i, n := range nodes {
+		s.positions[n.ID] = Position{
+			X: 150 + float64(i%5)*200,
+			Y: 80 + float64(i/5)*150,
+		}
+	}
+
+	writeJSON(w, s.buildGraphResp(nil))
+}
+
 func main() {
+	flag.StringVar(&graphDir, "dir", "", "directory containing saved spine graph files")
+	flag.Parse()
+
 	enrichCodebaseTemplate()
 	s := newServer(true)
 
@@ -1170,6 +1280,10 @@ func main() {
 	// Export/Import API routes.
 	mux.HandleFunc("/api/graph/export", s.handleExport)
 	mux.HandleFunc("/api/graph/import", s.handleImport)
+
+	// File loading API routes (for viewing MCP-created graphs).
+	mux.HandleFunc("/api/files/list", s.handleListFiles)
+	mux.HandleFunc("/api/files/load", s.handleLoadFile)
 
 	// Metadata API routes.
 	mux.HandleFunc("/api/node/meta", s.handleNodeMeta)
