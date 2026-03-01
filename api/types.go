@@ -116,6 +116,9 @@ type GraphSummary struct {
 	Leaves       []string       `json:"leaves"`
 	StatusCounts map[string]int `json:"status_counts"`
 	Components   int            `json:"components"`
+	Density      float64        `json:"density"`
+	AvgDegree    float64        `json:"avg_degree"`
+	Diameter     int            `json:"diameter"`
 }
 
 // --- Transition ---

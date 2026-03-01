@@ -116,6 +116,9 @@ type algoResultResp struct {
 	Descendants    []string    `json:"descendants,omitempty"`
 	HighlightNodes []string    `json:"highlightNodes,omitempty"`
 	HighlightEdges [][2]string `json:"highlightEdges,omitempty"`
+	MSTEdges       [][2]string `json:"mstEdges,omitempty"`
+	MSTWeight      float64     `json:"mstWeight,omitempty"`
+	Analytics      any         `json:"analytics,omitempty"`
 	Error          string      `json:"error,omitempty"`
 }
 
@@ -406,6 +409,43 @@ func (s *server) handleAlgo(w http.ResponseWriter, r *http.Request) {
 		desc := spine.Descendants(s.graph, req.Start)
 		result.Descendants = desc
 		result.HighlightNodes = append(desc, req.Start)
+
+	case "scc":
+		comps := spine.StronglyConnectedComponents(s.graph)
+		result.Components = comps
+		// Highlight all nodes with component colors (flatten).
+		var all []string
+		for _, c := range comps {
+			all = append(all, c...)
+		}
+		result.HighlightNodes = all
+
+	case "mst":
+		edges, totalWeight, err := spine.MinimumSpanningTree(s.graph)
+		if err != nil {
+			result.Error = err.Error()
+			break
+		}
+		result.MSTWeight = totalWeight
+		mstEdges := make([][2]string, len(edges))
+		for i, e := range edges {
+			mstEdges[i] = [2]string{e.From, e.To}
+		}
+		result.MSTEdges = mstEdges
+		// Highlight the nodes that are part of the MST.
+		nodeSet := make(map[string]bool)
+		for _, e := range edges {
+			nodeSet[e.From] = true
+			nodeSet[e.To] = true
+		}
+		for id := range nodeSet {
+			result.HighlightNodes = append(result.HighlightNodes, id)
+		}
+		result.HighlightEdges = mstEdges
+
+	case "analytics":
+		a := spine.GraphAnalytics(s.graph)
+		result.Analytics = a
 
 	default:
 		result.Error = fmt.Sprintf("unknown algorithm: %s", algo)

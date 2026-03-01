@@ -138,4 +138,22 @@ func (s *Server) registerTools() {
 			},
 			"required": []string{"graph"},
 		}, s.handleRemove)
+
+	s.addTool("scc", "Compute strongly connected components of a graph",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+			},
+			"required": []string{"graph"},
+		}, s.handleSCC)
+
+	s.addTool("mst", "Compute minimum spanning tree of an undirected graph",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+			},
+			"required": []string{"graph"},
+		}, s.handleMST)
 }
