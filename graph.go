@@ -22,12 +22,13 @@ type Edge[T any] struct {
 // Graph is a generic graph supporting both directed and undirected modes.
 // N is the node data type and E is the edge data type.
 type Graph[N, E any] struct {
-	Directed bool
-	nodes    map[string]Node[N]
-	out      map[string]map[string]Edge[E] // from -> to -> edge
-	in       map[string]map[string]Edge[E] // to -> from -> edge
-	nodeMeta map[string]*Store             // node ID -> metadata store
-	edgeMeta map[string]map[string]*Store  // from -> to -> metadata store
+	Directed     bool
+	nodes        map[string]Node[N]
+	out          map[string]map[string]Edge[E] // from -> to -> edge
+	in           map[string]map[string]Edge[E] // to -> from -> edge
+	nodeMeta     map[string]*Store             // node ID -> metadata store
+	edgeMeta     map[string]map[string]*Store  // from -> to -> metadata store
+	rawEdgeCount int                           // total entries in out maps (for O(1) Size)
 }
 
 // NewGraph creates a new graph. If directed is true, edges are one-way.
@@ -63,9 +64,15 @@ func (g *Graph[N, E]) AddEdge(from, to string, data E, weight float64) error {
 		return fmt.Errorf("node %q not found", to)
 	}
 	e := Edge[E]{From: from, To: to, Data: data, Weight: weight}
+	if _, existed := g.out[from][to]; !existed {
+		g.rawEdgeCount++
+	}
 	g.out[from][to] = e
 	g.in[to][from] = e
 	if !g.Directed {
+		if _, existed := g.out[to][from]; !existed {
+			g.rawEdgeCount++
+		}
 		rev := Edge[E]{From: to, To: from, Data: data, Weight: weight}
 		g.out[to][from] = rev
 		g.in[from][to] = rev
@@ -78,12 +85,18 @@ func (g *Graph[N, E]) RemoveNode(id string) {
 	if !g.HasNode(id) {
 		return
 	}
-	// Remove outgoing edges
+	// Count and remove outgoing edges
+	g.rawEdgeCount -= len(g.out[id])
 	for to := range g.out[id] {
 		delete(g.in[to], id)
 	}
-	// Remove incoming edges
+	// Count and remove incoming edges (skip already-counted outgoing)
 	for from := range g.in[id] {
+		if from != id { // self-loops already counted above
+			if _, ok := g.out[from][id]; ok {
+				g.rawEdgeCount--
+			}
+		}
 		delete(g.out[from], id)
 	}
 	delete(g.out, id)
@@ -102,9 +115,15 @@ func (g *Graph[N, E]) RemoveNode(id string) {
 
 // RemoveEdge removes the edge from -> to.
 func (g *Graph[N, E]) RemoveEdge(from, to string) {
+	if _, existed := g.out[from][to]; existed {
+		g.rawEdgeCount--
+	}
 	delete(g.out[from], to)
 	delete(g.in[to], from)
 	if !g.Directed {
+		if _, existed := g.out[to][from]; existed {
+			g.rawEdgeCount--
+		}
 		delete(g.out[to], from)
 		delete(g.in[from], to)
 	}
@@ -221,9 +240,12 @@ func (g *Graph[N, E]) Order() int {
 	return len(g.nodes)
 }
 
-// Size returns the number of edges.
+// Size returns the number of edges in O(1).
 func (g *Graph[N, E]) Size() int {
-	return len(g.Edges())
+	if !g.Directed {
+		return g.rawEdgeCount / 2
+	}
+	return g.rawEdgeCount
 }
 
 // Copy returns a deep copy of the graph.
@@ -244,6 +266,7 @@ func (g *Graph[N, E]) Copy() *Graph[N, E] {
 			c.in[to][from] = e
 		}
 	}
+	c.rawEdgeCount = g.rawEdgeCount
 	for id, store := range g.nodeMeta {
 		c.nodeMeta[id] = store.Copy()
 	}

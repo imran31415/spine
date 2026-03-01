@@ -47,6 +47,12 @@ func (m *Manager) getGraph(name string) (*spine.Graph[NodeData, EdgeData], error
 // Open loads a graph from disk, or creates a new directed graph if the file
 // does not exist. The graph is cached in memory for subsequent operations.
 func (m *Manager) Open(name string) (*GraphInfo, error) {
+	return m.OpenWithDirected(name, true)
+}
+
+// OpenWithDirected loads a graph from disk, or creates a new graph with the
+// specified directed mode if the file does not exist.
+func (m *Manager) OpenWithDirected(name string, directed bool) (*GraphInfo, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -58,7 +64,7 @@ func (m *Manager) Open(name string) (*GraphInfo, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			g := spine.NewGraph[NodeData, EdgeData](true)
+			g := spine.NewGraph[NodeData, EdgeData](directed)
 			m.graphs[name] = g
 			return m.graphInfo(name, g), nil
 		}
@@ -74,40 +80,31 @@ func (m *Manager) Open(name string) (*GraphInfo, error) {
 	// map-typed. We need to fix them up since json.Unmarshal fills structs
 	// with matching keys but the generic N type in spine is decoded as a
 	// map[string]any when the JSON has object values.
-	m.fixupNodeData(g)
+	FixupGraphData(g)
 
 	m.graphs[name] = g
 	return m.graphInfo(name, g), nil
 }
 
-// fixupNodeData re-parses node data that json.Unmarshal may have decoded as
-// map[string]any instead of the concrete NodeData struct.
-func (m *Manager) fixupNodeData(g *spine.Graph[NodeData, EdgeData]) {
-	for _, n := range g.Nodes() {
-		// Check if Data is actually a NodeData or was decoded as map
-		switch d := any(n.Data).(type) {
-		case map[string]any:
-			nd := NodeData{}
-			if l, ok := d["label"]; ok {
-				nd.Label, _ = l.(string)
-			}
-			if s, ok := d["status"]; ok {
-				nd.Status, _ = s.(string)
-			}
-			g.AddNode(n.ID, nd)
+// FixupGraphData re-parses node and edge data that json.Unmarshal may have
+// decoded as map[string]any instead of the concrete NodeData/EdgeData structs.
+func FixupGraphData(g *spine.Graph[NodeData, EdgeData]) {
+	spine.FixupMapData(g, func(m map[string]any) NodeData {
+		nd := NodeData{}
+		if l, ok := m["label"]; ok {
+			nd.Label, _ = l.(string)
 		}
-	}
-	// Same for edges
-	for _, e := range g.Edges() {
-		switch d := any(e.Data).(type) {
-		case map[string]any:
-			ed := EdgeData{}
-			if l, ok := d["label"]; ok {
-				ed.Label, _ = l.(string)
-			}
-			_ = g.AddEdge(e.From, e.To, ed, e.Weight)
+		if s, ok := m["status"]; ok {
+			nd.Status, _ = s.(string)
 		}
-	}
+		return nd
+	}, func(m map[string]any) EdgeData {
+		ed := EdgeData{}
+		if l, ok := m["label"]; ok {
+			ed.Label, _ = l.(string)
+		}
+		return ed
+	})
 }
 
 // OpenGraph opens a graph by name and returns the raw spine graph.

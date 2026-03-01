@@ -519,6 +519,15 @@ var validStatuses = map[string]bool{
 	"done": true, "failed": true, "skipped": true,
 }
 
+// validTransitions defines allowed status changes.
+var validTransitions = map[string]map[string]bool{
+	"":        {"pending": true, "ready": true},
+	"pending": {"ready": true, "skipped": true},
+	"ready":   {"running": true, "skipped": true},
+	"running": {"done": true, "failed": true},
+	"failed":  {"pending": true},
+}
+
 // computeReady auto-promotes pending nodes to ready when all in-edge sources are done.
 func (s *server) computeReady() {
 	for _, n := range s.graph.Nodes() {
@@ -558,6 +567,12 @@ func (s *server) handleUpdateNodeStatus(w http.ResponseWriter, r *http.Request) 
 	n, ok := s.graph.GetNode(req.ID)
 	if !ok {
 		http.Error(w, "node not found", 404)
+		return
+	}
+	// Validate transition
+	allowed, exists := validTransitions[n.Data.Status]
+	if !exists || !allowed[req.Status] {
+		http.Error(w, fmt.Sprintf("invalid transition: %q -> %q", n.Data.Status, req.Status), 400)
 		return
 	}
 	s.graph.AddNode(req.ID, NodeData{Label: n.Data.Label, Status: req.Status})
@@ -1253,30 +1268,23 @@ func (s *server) handleLoadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fix up node data that may have been decoded as map[string]any.
-	for _, n := range g.Nodes() {
-		switch d := any(n.Data).(type) {
-		case map[string]any:
-			nd := NodeData{}
-			if l, ok := d["label"]; ok {
-				nd.Label, _ = l.(string)
-			}
-			if st, ok := d["status"]; ok {
-				nd.Status, _ = st.(string)
-			}
-			g.AddNode(n.ID, nd)
+	// Fix up node/edge data that may have been decoded as map[string]any.
+	spine.FixupMapData(g, func(m map[string]any) NodeData {
+		nd := NodeData{}
+		if l, ok := m["label"]; ok {
+			nd.Label, _ = l.(string)
 		}
-	}
-	for _, e := range g.Edges() {
-		switch d := any(e.Data).(type) {
-		case map[string]any:
-			ed := EdgeData{}
-			if l, ok := d["label"]; ok {
-				ed.Label, _ = l.(string)
-			}
-			_ = g.AddEdge(e.From, e.To, ed, e.Weight)
+		if st, ok := m["status"]; ok {
+			nd.Status, _ = st.(string)
 		}
-	}
+		return nd
+	}, func(m map[string]any) EdgeData {
+		ed := EdgeData{}
+		if l, ok := m["label"]; ok {
+			ed.Label, _ = l.(string)
+		}
+		return ed
+	})
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
