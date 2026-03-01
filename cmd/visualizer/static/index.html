@@ -1122,6 +1122,9 @@ canvas {
       <button data-algo="leaves">Leaves</button>
       <button data-algo="ancestors">Ancestors</button>
       <button data-algo="descendants">Descendants</button>
+      <button data-algo="scc">SCC</button>
+      <button data-algo="mst">MST</button>
+      <button data-algo="analytics">Stats</button>
     </div>
   </div>
 
@@ -1521,9 +1524,17 @@ function isHighlightedNode(id) {
   return true;
 }
 
+function isMSTEdge(from, to) {
+  if (!state.result || !state.result.mstEdges) return false;
+  return state.result.mstEdges.some(e =>
+    (e[0] === from && e[1] === to) || (e[0] === to && e[1] === from));
+}
+
 function isHighlightedEdge(from, to) {
-  if (!state.result || !state.result.highlightEdges) return false;
-  return state.result.highlightEdges.some(e => e[0] === from && e[1] === to);
+  if (!state.result) return false;
+  if (state.result.highlightEdges && state.result.highlightEdges.some(e => e[0] === from && e[1] === to)) return true;
+  if (isMSTEdge(from, to)) return true;
+  return false;
 }
 
 function getNodePos(id) {
@@ -1915,6 +1926,23 @@ function showResult(result) {
   }
   if (result.descendants && result.descendants.length) {
     html += `<div>Descendants: <span class="highlight">${result.descendants.join(', ')}</span></div>`;
+  }
+  if (result.mstEdges && result.mstEdges.length) {
+    html += `<div>MST Weight: <span class="highlight">${result.mstWeight}</span></div>`;
+    result.mstEdges.forEach(e => {
+      html += `<div>Edge: <span class="highlight">${e[0]} — ${e[1]}</span></div>`;
+    });
+  }
+  if (result.analytics) {
+    const a = result.analytics;
+    html += `<div>Nodes: <span class="highlight">${a.node_count}</span></div>`;
+    html += `<div>Edges: <span class="highlight">${a.edge_count}</span></div>`;
+    html += `<div>Density: <span class="highlight">${a.density.toFixed(4)}</span></div>`;
+    html += `<div>Avg Degree: <span class="highlight">${a.avg_degree.toFixed(2)}</span></div>`;
+    html += `<div>Diameter: <span class="highlight">${a.diameter === -1 ? '∞ (disconnected)' : a.diameter}</span></div>`;
+    html += `<div>Components: <span class="highlight">${a.components}</span></div>`;
+    html += `<div>Max In-Degree: <span class="highlight">${a.max_in_degree}</span></div>`;
+    html += `<div>Max Out-Degree: <span class="highlight">${a.max_out_degree}</span></div>`;
   }
   dom.resultContent.innerHTML = html || '<span class="highlight">No results</span>';
 

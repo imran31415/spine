@@ -286,6 +286,151 @@ func Subgraph[N, E any](g *Graph[N, E], ids []string) *Graph[N, E] {
 	return sub
 }
 
+// StronglyConnectedComponents returns the strongly connected components of a
+// directed graph using Tarjan's algorithm. For undirected graphs it delegates
+// to ConnectedComponents. Components and their contents are sorted
+// deterministically.
+func StronglyConnectedComponents[N, E any](g *Graph[N, E]) [][]string {
+	if !g.Directed {
+		return ConnectedComponents(g)
+	}
+
+	nodes := g.Nodes()
+	index := make(map[string]int, len(nodes))
+	lowlink := make(map[string]int, len(nodes))
+	onStack := make(map[string]bool, len(nodes))
+	var stack []string
+	counter := 0
+	var components [][]string
+
+	var strongconnect func(id string)
+	strongconnect = func(id string) {
+		index[id] = counter
+		lowlink[id] = counter
+		counter++
+		stack = append(stack, id)
+		onStack[id] = true
+
+		for _, e := range g.OutEdges(id) {
+			w := e.To
+			if _, visited := index[w]; !visited {
+				strongconnect(w)
+				if lowlink[w] < lowlink[id] {
+					lowlink[id] = lowlink[w]
+				}
+			} else if onStack[w] {
+				if index[w] < lowlink[id] {
+					lowlink[id] = index[w]
+				}
+			}
+		}
+
+		if lowlink[id] == index[id] {
+			var comp []string
+			for {
+				w := stack[len(stack)-1]
+				stack = stack[:len(stack)-1]
+				onStack[w] = false
+				comp = append(comp, w)
+				if w == id {
+					break
+				}
+			}
+			sort.Strings(comp)
+			components = append(components, comp)
+		}
+	}
+
+	for _, n := range nodes {
+		if _, visited := index[n.ID]; !visited {
+			strongconnect(n.ID)
+		}
+	}
+
+	// Sort components by first element for deterministic output.
+	sort.Slice(components, func(i, j int) bool {
+		return components[i][0] < components[j][0]
+	})
+	return components
+}
+
+// unionFind implements a disjoint-set data structure for Kruskal's algorithm.
+type unionFind struct {
+	parent map[string]string
+	rank   map[string]int
+}
+
+func newUnionFind(ids []string) *unionFind {
+	uf := &unionFind{
+		parent: make(map[string]string, len(ids)),
+		rank:   make(map[string]int, len(ids)),
+	}
+	for _, id := range ids {
+		uf.parent[id] = id
+	}
+	return uf
+}
+
+func (uf *unionFind) find(x string) string {
+	for uf.parent[x] != x {
+		uf.parent[x] = uf.parent[uf.parent[x]] // path compression
+		x = uf.parent[x]
+	}
+	return x
+}
+
+func (uf *unionFind) union(x, y string) bool {
+	rx, ry := uf.find(x), uf.find(y)
+	if rx == ry {
+		return false
+	}
+	if uf.rank[rx] < uf.rank[ry] {
+		rx, ry = ry, rx
+	}
+	uf.parent[ry] = rx
+	if uf.rank[rx] == uf.rank[ry] {
+		uf.rank[rx]++
+	}
+	return true
+}
+
+// MinimumSpanningTree computes a minimum spanning tree (or forest) of an
+// undirected graph using Kruskal's algorithm. Returns the selected edges,
+// the total weight, and an error if the graph is directed.
+func MinimumSpanningTree[N, E any](g *Graph[N, E]) ([]Edge[E], float64, error) {
+	if g.Directed {
+		return nil, 0, errors.New("minimum spanning tree requires an undirected graph")
+	}
+
+	edges := g.Edges()
+	sort.Slice(edges, func(i, j int) bool {
+		if edges[i].Weight != edges[j].Weight {
+			return edges[i].Weight < edges[j].Weight
+		}
+		if edges[i].From != edges[j].From {
+			return edges[i].From < edges[j].From
+		}
+		return edges[i].To < edges[j].To
+	})
+
+	nodes := g.Nodes()
+	ids := make([]string, len(nodes))
+	for i, n := range nodes {
+		ids[i] = n.ID
+	}
+	uf := newUnionFind(ids)
+
+	var mst []Edge[E]
+	totalWeight := 0.0
+	for _, e := range edges {
+		if uf.union(e.From, e.To) {
+			mst = append(mst, e)
+			totalWeight += e.Weight
+		}
+	}
+	return mst, totalWeight, nil
+}
+
 // ConnectedComponents returns the connected components of the graph
 // as a list of node-ID sets. For directed graphs, this finds weakly connected components.
 func ConnectedComponents[N, E any](g *Graph[N, E]) [][]string {

@@ -110,6 +110,18 @@ func (m *Manager) fixupNodeData(g *spine.Graph[NodeData, EdgeData]) {
 	}
 }
 
+// OpenGraph opens a graph by name and returns the raw spine graph.
+// It opens the graph if not already loaded.
+func (m *Manager) OpenGraph(name string) (*spine.Graph[NodeData, EdgeData], error) {
+	// Ensure the graph is loaded (Open is safe to call repeatedly).
+	if _, err := m.Open(name); err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.getGraph(name)
+}
+
 // Save persists the named graph to disk as JSON.
 func (m *Manager) Save(name string) error {
 	m.mu.Lock()
@@ -204,7 +216,7 @@ func (m *Manager) Summary(name string) (*GraphSummary, error) {
 
 	roots := spine.Roots(g)
 	leaves := spine.Leaves(g)
-	comps := spine.ConnectedComponents(g)
+	analytics := spine.GraphAnalytics(g)
 
 	rootIDs := make([]string, len(roots))
 	for i, r := range roots {
@@ -229,7 +241,10 @@ func (m *Manager) Summary(name string) (*GraphSummary, error) {
 		Roots:        rootIDs,
 		Leaves:       leafIDs,
 		StatusCounts: statusCounts,
-		Components:   len(comps),
+		Components:   analytics.Components,
+		Density:      analytics.Density,
+		AvgDegree:    analytics.AvgDegree,
+		Diameter:     analytics.Diameter,
 	}, nil
 }
 

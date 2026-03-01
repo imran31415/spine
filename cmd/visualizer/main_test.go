@@ -335,6 +335,104 @@ func TestSaveFile(t *testing.T) {
 	}
 }
 
+func TestAlgoSCC(t *testing.T) {
+	s := newTestServer(t)
+	// Create a cycle: 1->2->3->1
+	doJSON(t, s.handleAddNode, addNodeReq{ID: "1"})
+	doJSON(t, s.handleAddNode, addNodeReq{ID: "2"})
+	doJSON(t, s.handleAddNode, addNodeReq{ID: "3"})
+	doJSON(t, s.handleAddEdge, addEdgeReq{From: "1", To: "2", Weight: 1})
+	doJSON(t, s.handleAddEdge, addEdgeReq{From: "2", To: "3", Weight: 1})
+	doJSON(t, s.handleAddEdge, addEdgeReq{From: "3", To: "1", Weight: 1})
+
+	req := httptest.NewRequest("POST", "/api/algo?algo=scc", nil)
+	w := httptest.NewRecorder()
+	s.handleAlgo(w, req)
+	resp := decodeGraphResp(t, w)
+
+	if resp.Result == nil {
+		t.Fatal("expected result")
+	}
+	if len(resp.Result.Components) != 1 {
+		t.Fatalf("expected 1 SCC, got %d", len(resp.Result.Components))
+	}
+	if len(resp.Result.Components[0]) != 3 {
+		t.Fatalf("expected SCC with 3 nodes, got %d", len(resp.Result.Components[0]))
+	}
+}
+
+func TestAlgoMST(t *testing.T) {
+	s := newServer(false) // undirected graph for MST
+	doJSON(t, s.handleAddNode, addNodeReq{ID: "a"})
+	doJSON(t, s.handleAddNode, addNodeReq{ID: "b"})
+	doJSON(t, s.handleAddNode, addNodeReq{ID: "c"})
+	doJSON(t, s.handleAddEdge, addEdgeReq{From: "a", To: "b", Weight: 1})
+	doJSON(t, s.handleAddEdge, addEdgeReq{From: "b", To: "c", Weight: 2})
+	doJSON(t, s.handleAddEdge, addEdgeReq{From: "a", To: "c", Weight: 3})
+
+	req := httptest.NewRequest("POST", "/api/algo?algo=mst", nil)
+	w := httptest.NewRecorder()
+	s.handleAlgo(w, req)
+	resp := decodeGraphResp(t, w)
+
+	if resp.Result == nil {
+		t.Fatal("expected result")
+	}
+	if resp.Result.Error != "" {
+		t.Fatalf("unexpected error: %s", resp.Result.Error)
+	}
+	if len(resp.Result.MSTEdges) != 2 {
+		t.Fatalf("expected 2 MST edges, got %d", len(resp.Result.MSTEdges))
+	}
+	if resp.Result.MSTWeight != 3 {
+		t.Fatalf("expected MST weight 3, got %f", resp.Result.MSTWeight)
+	}
+}
+
+func TestAlgoMSTDirectedError(t *testing.T) {
+	s := newTestServer(t) // directed by default
+	doJSON(t, s.handleAddNode, addNodeReq{ID: "a"})
+	doJSON(t, s.handleAddNode, addNodeReq{ID: "b"})
+	doJSON(t, s.handleAddEdge, addEdgeReq{From: "a", To: "b", Weight: 1})
+
+	req := httptest.NewRequest("POST", "/api/algo?algo=mst", nil)
+	w := httptest.NewRecorder()
+	s.handleAlgo(w, req)
+	resp := decodeGraphResp(t, w)
+
+	if resp.Result == nil || resp.Result.Error == "" {
+		t.Fatal("expected error for MST on directed graph")
+	}
+}
+
+func TestAlgoAnalytics(t *testing.T) {
+	s := newTestServer(t)
+	doJSON(t, s.handleAddNode, addNodeReq{ID: "1"})
+	doJSON(t, s.handleAddNode, addNodeReq{ID: "2"})
+	doJSON(t, s.handleAddNode, addNodeReq{ID: "3"})
+	doJSON(t, s.handleAddEdge, addEdgeReq{From: "1", To: "2", Weight: 1})
+	doJSON(t, s.handleAddEdge, addEdgeReq{From: "2", To: "3", Weight: 1})
+
+	req := httptest.NewRequest("POST", "/api/algo?algo=analytics", nil)
+	w := httptest.NewRecorder()
+	s.handleAlgo(w, req)
+	resp := decodeGraphResp(t, w)
+
+	if resp.Result == nil {
+		t.Fatal("expected result")
+	}
+	if resp.Result.Analytics == nil {
+		t.Fatal("expected analytics data")
+	}
+	// Verify analytics has the expected fields by marshalling and unmarshalling.
+	b, _ := json.Marshal(resp.Result.Analytics)
+	var analytics map[string]any
+	json.Unmarshal(b, &analytics)
+	if analytics["node_count"].(float64) != 3 {
+		t.Fatalf("expected 3 nodes in analytics, got %v", analytics["node_count"])
+	}
+}
+
 func TestSaveFilePathTraversal(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldDir := graphDir

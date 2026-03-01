@@ -267,6 +267,131 @@ func TestConnectedComponentsSingleNode(t *testing.T) {
 	}
 }
 
+func TestSCC(t *testing.T) {
+	// Graph with 2 SCCs: a->b->c->a (cycle) and c->d (bridge to singleton)
+	g := NewGraph[string, int](true)
+	for _, id := range []string{"a", "b", "c", "d"} {
+		g.AddNode(id, id)
+	}
+	g.AddEdge("a", "b", 0, 1)
+	g.AddEdge("b", "c", 0, 1)
+	g.AddEdge("c", "a", 0, 1)
+	g.AddEdge("c", "d", 0, 1)
+
+	comps := StronglyConnectedComponents(g)
+	if len(comps) != 2 {
+		t.Fatalf("expected 2 SCCs, got %d: %v", len(comps), comps)
+	}
+	// One SCC should be {a,b,c}, the other {d}
+	found3 := false
+	found1 := false
+	for _, c := range comps {
+		if len(c) == 3 {
+			found3 = true
+			if c[0] != "a" || c[1] != "b" || c[2] != "c" {
+				t.Fatalf("expected SCC [a b c], got %v", c)
+			}
+		}
+		if len(c) == 1 && c[0] == "d" {
+			found1 = true
+		}
+	}
+	if !found3 || !found1 {
+		t.Fatalf("unexpected SCCs: %v", comps)
+	}
+}
+
+func TestSCCUndirected(t *testing.T) {
+	// Undirected graph: should fall back to ConnectedComponents
+	g := NewGraph[int, int](false)
+	g.AddNode("a", 1)
+	g.AddNode("b", 2)
+	g.AddNode("c", 3)
+	g.AddEdge("a", "b", 0, 1)
+	// c is isolated
+
+	comps := StronglyConnectedComponents(g)
+	if len(comps) != 2 {
+		t.Fatalf("expected 2 components for undirected fallback, got %d", len(comps))
+	}
+}
+
+func TestSCCDAG(t *testing.T) {
+	// DAG: each node is its own SCC
+	g := NewGraph[string, int](true)
+	for _, id := range []string{"a", "b", "c"} {
+		g.AddNode(id, id)
+	}
+	g.AddEdge("a", "b", 0, 1)
+	g.AddEdge("b", "c", 0, 1)
+
+	comps := StronglyConnectedComponents(g)
+	if len(comps) != 3 {
+		t.Fatalf("expected 3 SCCs in DAG, got %d: %v", len(comps), comps)
+	}
+	for _, c := range comps {
+		if len(c) != 1 {
+			t.Fatalf("expected singleton SCC, got %v", c)
+		}
+	}
+}
+
+func TestMST(t *testing.T) {
+	// Triangle: a-b(1), b-c(2), a-c(3). MST should pick a-b and b-c (total=3).
+	g := NewGraph[string, int](false)
+	g.AddNode("a", "A")
+	g.AddNode("b", "B")
+	g.AddNode("c", "C")
+	g.AddEdge("a", "b", 0, 1)
+	g.AddEdge("b", "c", 0, 2)
+	g.AddEdge("a", "c", 0, 3)
+
+	edges, total, err := MinimumSpanningTree(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(edges) != 2 {
+		t.Fatalf("expected 2 MST edges, got %d", len(edges))
+	}
+	if total != 3.0 {
+		t.Fatalf("expected total weight 3, got %f", total)
+	}
+}
+
+func TestMSTDirectedError(t *testing.T) {
+	g := NewGraph[int, int](true)
+	g.AddNode("a", 1)
+	g.AddNode("b", 2)
+	g.AddEdge("a", "b", 0, 1)
+
+	_, _, err := MinimumSpanningTree(g)
+	if err == nil {
+		t.Fatal("expected error for directed graph")
+	}
+}
+
+func TestMSTDisconnected(t *testing.T) {
+	// Two components: a-b(1) and c-d(2). MST forest should have 2 edges.
+	g := NewGraph[string, int](false)
+	g.AddNode("a", "A")
+	g.AddNode("b", "B")
+	g.AddNode("c", "C")
+	g.AddNode("d", "D")
+	g.AddEdge("a", "b", 0, 1)
+	g.AddEdge("c", "d", 0, 2)
+
+	edges, total, err := MinimumSpanningTree(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(edges) != 2 {
+		t.Fatalf("expected 2 MST forest edges, got %d", len(edges))
+	}
+	if total != 3.0 {
+		t.Fatalf("expected total weight 3, got %f", total)
+	}
+}
+
 func indexOf(s []string, v string) int {
 	for i, x := range s {
 		if x == v {

@@ -120,8 +120,8 @@ func TestToolsList(t *testing.T) {
 	}
 	json.Unmarshal(b, &result)
 
-	if len(result.Tools) != 9 {
-		t.Errorf("expected 9 tools, got %d", len(result.Tools))
+	if len(result.Tools) != 11 {
+		t.Errorf("expected 11 tools, got %d", len(result.Tools))
 	}
 
 	names := make(map[string]bool)
@@ -131,6 +131,7 @@ func TestToolsList(t *testing.T) {
 	for _, expected := range []string{
 		"open_graph", "save_graph", "list_graphs", "delete_graph",
 		"graph_summary", "upsert", "read_nodes", "transition", "remove",
+		"scc", "mst",
 	} {
 		if !names[expected] {
 			t.Errorf("missing tool: %s", expected)
@@ -293,6 +294,61 @@ func TestToolError(t *testing.T) {
 	}
 	if len(tcr.Content) == 0 || tcr.Content[0].Text == "" {
 		t.Fatal("expected error message in content")
+	}
+}
+
+func TestSCC(t *testing.T) {
+	srv := newTestServer(t)
+
+	// Create a graph with a cycle: a->b->c->a and a bridge c->d.
+	callTool(t, srv, "open_graph", map[string]any{"name": "scc-test"})
+	callTool(t, srv, "upsert", map[string]any{
+		"graph": "scc-test",
+		"nodes": []map[string]any{
+			{"id": "a"}, {"id": "b"}, {"id": "c"}, {"id": "d"},
+		},
+		"edges": []map[string]any{
+			{"from": "a", "to": "b"},
+			{"from": "b", "to": "c"},
+			{"from": "c", "to": "a"},
+			{"from": "c", "to": "d"},
+		},
+	})
+
+	tcr := callTool(t, srv, "scc", map[string]any{"graph": "scc-test"})
+	if tcr.IsError {
+		t.Fatalf("scc failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		Components [][]string `json:"components"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if len(result.Components) != 2 {
+		t.Fatalf("expected 2 SCCs, got %d", len(result.Components))
+	}
+}
+
+func TestMST(t *testing.T) {
+	srv := newTestServer(t)
+
+	// Create an undirected graph. The default is directed, so we need
+	// to create an undirected one. Since the API always creates directed
+	// graphs, MST should return an error.
+	callTool(t, srv, "open_graph", map[string]any{"name": "mst-test"})
+	callTool(t, srv, "upsert", map[string]any{
+		"graph": "mst-test",
+		"nodes": []map[string]any{
+			{"id": "a"}, {"id": "b"},
+		},
+		"edges": []map[string]any{
+			{"from": "a", "to": "b", "weight": 1.0},
+		},
+	})
+
+	// Should fail because the graph is directed.
+	tcr := callTool(t, srv, "mst", map[string]any{"graph": "mst-test"})
+	if !tcr.IsError {
+		t.Fatal("expected error for MST on directed graph")
 	}
 }
 
