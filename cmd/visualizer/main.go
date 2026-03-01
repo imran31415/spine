@@ -1175,8 +1175,7 @@ func (s *server) handleLoadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sanitize: only allow simple names, no path traversal.
-	if strings.Contains(req.Name, "/") || strings.Contains(req.Name, "\\") || req.Name == ".." {
+	if !isValidGraphName(req.Name) {
 		http.Error(w, "invalid graph name", 400)
 		return
 	}
@@ -1192,7 +1191,23 @@ func (s *server) handleLoadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	g, err := spine.Unmarshal[NodeData, EdgeData](data)
+	// Try parsing as wrapper format {positions, snapshot} first.
+	var wrapper struct {
+		Positions map[string]Position `json:"positions"`
+		Snapshot  json.RawMessage     `json:"snapshot"`
+	}
+	var graphData []byte
+	var savedPositions map[string]Position
+
+	if err := json.Unmarshal(data, &wrapper); err == nil && len(wrapper.Snapshot) > 0 {
+		graphData = wrapper.Snapshot
+		savedPositions = wrapper.Positions
+	} else {
+		// Fall back to raw spine format.
+		graphData = data
+	}
+
+	g, err := spine.Unmarshal[NodeData, EdgeData](graphData)
 	if err != nil {
 		http.Error(w, "failed to parse graph: "+err.Error(), 400)
 		return
@@ -1229,16 +1244,101 @@ func (s *server) handleLoadFile(w http.ResponseWriter, r *http.Request) {
 	s.graph = g
 	s.positions = make(map[string]Position)
 
-	// Auto-layout: grid layout since saved graphs don't have positions.
-	nodes := s.graph.Nodes()
-	for i, n := range nodes {
-		s.positions[n.ID] = Position{
-			X: 150 + float64(i%5)*200,
-			Y: 80 + float64(i/5)*150,
+	if savedPositions != nil {
+		// Use saved positions; grid-layout any nodes missing positions.
+		col := 0
+		for _, n := range s.graph.Nodes() {
+			if pos, ok := savedPositions[n.ID]; ok {
+				s.positions[n.ID] = pos
+			} else {
+				s.positions[n.ID] = Position{
+					X: 150 + float64(col%5)*200,
+					Y: 80 + float64(col/5)*150,
+				}
+				col++
+			}
+		}
+	} else {
+		// Auto-layout: grid layout since saved graphs don't have positions.
+		nodes := s.graph.Nodes()
+		for i, n := range nodes {
+			s.positions[n.ID] = Position{
+				X: 150 + float64(i%5)*200,
+				Y: 80 + float64(i/5)*150,
+			}
 		}
 	}
 
 	writeJSON(w, s.buildGraphResp(nil))
+}
+
+// isValidGraphName checks that a graph name is safe for use as a filename.
+func isValidGraphName(name string) bool {
+	if name == "" || name == ".." || name == "." {
+		return false
+	}
+	if strings.Contains(name, "/") || strings.Contains(name, "\\") || strings.Contains(name, "..") {
+		return false
+	}
+	return true
+}
+
+// handleSaveFile saves the current graph to a file in the configured directory.
+func (s *server) handleSaveFile(w http.ResponseWriter, r *http.Request) {
+	if graphDir == "" {
+		http.Error(w, "no graph directory configured (use -dir flag)", 400)
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	if req.Name == "" {
+		http.Error(w, "name is required", 400)
+		return
+	}
+
+	if !isValidGraphName(req.Name) {
+		http.Error(w, "invalid graph name", 400)
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	snapBytes, err := spine.Marshal(s.graph, nil)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	var snapshot any
+	if err := json.Unmarshal(snapBytes, &snapshot); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	wrapper := map[string]any{
+		"positions": s.positions,
+		"snapshot":  snapshot,
+	}
+
+	out, err := json.MarshalIndent(wrapper, "", "  ")
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	filePath := filepath.Join(graphDir, req.Name+".json")
+	if err := os.WriteFile(filePath, out, 0644); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	writeJSON(w, map[string]string{"status": "ok", "name": req.Name})
 }
 
 func main() {
@@ -1281,9 +1381,10 @@ func main() {
 	mux.HandleFunc("/api/graph/export", s.handleExport)
 	mux.HandleFunc("/api/graph/import", s.handleImport)
 
-	// File loading API routes (for viewing MCP-created graphs).
+	// File API routes (for viewing/saving MCP-created graphs).
 	mux.HandleFunc("/api/files/list", s.handleListFiles)
 	mux.HandleFunc("/api/files/load", s.handleLoadFile)
+	mux.HandleFunc("/api/files/save", s.handleSaveFile)
 
 	// Metadata API routes.
 	mux.HandleFunc("/api/node/meta", s.handleNodeMeta)

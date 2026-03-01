@@ -76,6 +76,23 @@ body {
 
 #sidebar h1 span { color: var(--accent); }
 
+#search-section {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+#search-section input {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+#search-count {
+  font-size: 11px;
+  color: var(--text2);
+  margin-top: 4px;
+  min-height: 16px;
+}
+
 .section {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
@@ -898,6 +915,11 @@ canvas {
 <div id="sidebar">
   <h1><span>&#9670;</span> Spine Visualizer</h1>
 
+  <div id="search-section">
+    <input id="search-input" placeholder="Search nodes... ( / )" type="text">
+    <div id="search-count"></div>
+  </div>
+
   <div class="section">
     <div class="section-title">Graph Mode</div>
     <div class="toggle-row">
@@ -930,6 +952,28 @@ canvas {
       <button id="import-btn" style="flex:1">Import JSON</button>
     </div>
     <input type="file" id="import-file" accept=".json" style="display:none">
+  </div>
+
+  <div class="section" id="files-section">
+    <div class="section-title">Saved Graphs</div>
+    <div class="row">
+      <select id="file-select" style="flex:1">
+        <option value="">Select a graph...</option>
+      </select>
+      <button class="btn-sm" id="file-refresh-btn" title="Refresh">&#x21bb;</button>
+    </div>
+    <div id="file-count" style="font-size:11px;color:var(--text2);margin:4px 0"></div>
+    <div class="row">
+      <button class="primary" id="file-load-btn" style="flex:1" disabled>Load</button>
+      <button id="file-save-btn" style="flex:1">Save As...</button>
+    </div>
+    <div id="file-save-form" style="display:none;margin-top:6px">
+      <div class="row">
+        <input id="file-save-name" placeholder="Graph name">
+        <button class="primary" id="file-save-confirm-btn">Save</button>
+      </div>
+      <div id="file-save-status" style="font-size:11px;margin-top:4px;min-height:16px"></div>
+    </div>
   </div>
 
   <div class="section">
@@ -1012,6 +1056,7 @@ canvas {
     </div>
     <div class="row">
       <input id="edge-weight" placeholder="Weight" type="number" value="1" step="any">
+      <input id="edge-label" placeholder="Label (opt)">
     </div>
     <button class="primary full-width" id="add-edge-btn">Add Edge</button>
   </div>
@@ -1146,6 +1191,8 @@ let hoveredEdge = null;
 let animStep = 0;          // for animated result highlighting
 let animTimer = null;
 let nodeCounter = 0;
+let searchQuery = '';
+let searchMatches = new Set();
 
 // ---- Viewport (pan & zoom) ----
 let viewOffsetX = 0;
@@ -1195,6 +1242,7 @@ const dom = {
   edgeFrom: $('edge-from'),
   edgeTo: $('edge-to'),
   edgeWeight: $('edge-weight'),
+  edgeLabel: $('edge-label'),
   algoStart: $('algo-start'),
   algoEnd: $('algo-end'),
   templateSelect: $('template-select'),
@@ -1220,6 +1268,17 @@ const dom = {
   metaNextBtn: $('meta-next-btn'),
   metaKey: $('meta-key'),
   metaValue: $('meta-value'),
+  searchInput: $('search-input'),
+  searchCount: $('search-count'),
+  fileSelect: $('file-select'),
+  fileLoadBtn: $('file-load-btn'),
+  fileSaveBtn: $('file-save-btn'),
+  fileSaveName: $('file-save-name'),
+  fileSaveConfirmBtn: $('file-save-confirm-btn'),
+  fileSaveStatus: $('file-save-status'),
+  fileSaveForm: $('file-save-form'),
+  fileCount: $('file-count'),
+  fileRefreshBtn: $('file-refresh-btn'),
   exportBtn: $('export-btn'),
   importBtn: $('import-btn'),
   importFile: $('import-file'),
@@ -1330,8 +1389,29 @@ async function syncState(data) {
   if (data) {
     state = data;
     updateTaskControls();
+    updateSearchMatches();
     render();
   }
+}
+
+function updateSearch() {
+  searchQuery = dom.searchInput.value.trim().toLowerCase();
+  updateSearchMatches();
+  render();
+}
+
+function updateSearchMatches() {
+  searchMatches.clear();
+  if (!searchQuery) {
+    dom.searchCount.textContent = '';
+    return;
+  }
+  for (const n of state.nodes) {
+    if (n.id.toLowerCase().includes(searchQuery) || (n.label && n.label.toLowerCase().includes(searchQuery))) {
+      searchMatches.add(n.id);
+    }
+  }
+  dom.searchCount.textContent = searchMatches.size + ' of ' + state.nodes.length + ' nodes';
 }
 
 // ---- Actions ----
@@ -1366,11 +1446,13 @@ async function addEdgeFromForm() {
   const from = dom.edgeFrom.value.trim();
   const to = dom.edgeTo.value.trim();
   const weight = parseFloat(dom.edgeWeight.value) || 1;
+  const label = dom.edgeLabel.value.trim();
   if (!from || !to) return;
-  const data = await api('/api/edge/add', { from, to, weight });
+  const data = await api('/api/edge/add', { from, to, weight, label });
   syncState(data);
   dom.edgeFrom.value = '';
   dom.edgeTo.value = '';
+  dom.edgeLabel.value = '';
   closeSidebarIfMobile();
 }
 
@@ -1469,6 +1551,10 @@ function drawEdges() {
     const to = getNodePos(e.to);
     if (!from || !to) continue;
 
+    // Search dimming for edges
+    const edgeSearchDim = searchQuery && !searchMatches.has(e.from) && !searchMatches.has(e.to);
+    if (edgeSearchDim) ctx.globalAlpha = 0.1;
+
     const highlighted = isHighlightedEdge(e.from, e.to);
     const isSelected = selected && selected.type === 'edge' && selected.from === e.from && selected.to === e.to;
     const isHovered = hoveredEdge && hoveredEdge.from === e.from && hoveredEdge.to === e.to;
@@ -1485,13 +1571,22 @@ function drawEdges() {
       if (state.directed) {
         drawArrowArc(from.x, from.y - NODE_RADIUS - 15, 15, -0.3, color);
       }
+      // Self-loop label
+      if (e.label) {
+        ctx.fillStyle = '#8b90a0';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(e.label, from.x, from.y - NODE_RADIUS - 35);
+      }
+      if (edgeSearchDim) ctx.globalAlpha = 1;
       continue;
     }
 
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist === 0) continue;
+    if (dist === 0) { if (edgeSearchDim) ctx.globalAlpha = 1; continue; }
     const ux = dx / dist;
     const uy = dy / dist;
 
@@ -1520,18 +1615,29 @@ function drawEdges() {
       ctx.fill();
     }
 
-    // Weight label
-    if (e.weight !== 0 && e.weight !== 1) {
+    // Edge labels (label and/or weight)
+    const hasLabel = e.label && e.label.length > 0;
+    const hasWeight = e.weight !== 0 && e.weight !== 1;
+    if (hasLabel || hasWeight) {
       const mx = (sx + ex) / 2;
       const my = (sy + ey) / 2;
-      const nx = -uy * 12;
-      const ny = ux * 12;
+      const nx = -uy;
+      const ny = ux;
       ctx.fillStyle = '#8b90a0';
       ctx.font = '11px -apple-system, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(String(e.weight), mx + nx, my + ny);
+      if (hasLabel && hasWeight) {
+        ctx.fillText(e.label, mx + nx * 14, my + ny * 14);
+        ctx.fillText(String(e.weight), mx - nx * 10, my - ny * 10);
+      } else if (hasLabel) {
+        ctx.fillText(e.label, mx + nx * 12, my + ny * 12);
+      } else {
+        ctx.fillText(String(e.weight), mx + nx * 12, my + ny * 12);
+      }
     }
+
+    if (edgeSearchDim) ctx.globalAlpha = 1;
   }
 }
 
@@ -1556,6 +1662,10 @@ function drawNodes() {
     const isEdgeSource = edgeStart === n.id;
     const isHovered = hoveredNode === n.id;
     const sc = n.status && STATUS_COLORS[n.status] ? STATUS_COLORS[n.status] : null;
+
+    // Search dimming
+    const searchDim = searchQuery && !searchMatches.has(n.id);
+    if (searchDim) ctx.globalAlpha = 0.15;
 
     // Glow
     if (highlighted || isSel) {
@@ -1628,6 +1738,8 @@ function drawNodes() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(n.label || n.id, n.x, n.y);
+
+    if (searchDim) ctx.globalAlpha = 1;
   }
 }
 
@@ -2392,6 +2504,85 @@ async function handleImportFile(e) {
   dom.importFile.value = '';
 }
 
+// ---- File Browser ----
+async function fetchFiles() {
+  try {
+    const res = await fetch('/api/files/list');
+    const names = await res.json();
+    // Clear existing options except the placeholder.
+    dom.fileSelect.innerHTML = '<option value="">Select a graph...</option>';
+    if (names && names.length > 0) {
+      for (const name of names) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        dom.fileSelect.appendChild(opt);
+      }
+      dom.fileCount.textContent = names.length + ' saved graph' + (names.length !== 1 ? 's' : '');
+    } else {
+      dom.fileCount.textContent = 'No saved graphs';
+    }
+  } catch(e) {
+    dom.fileCount.textContent = '';
+  }
+  dom.fileLoadBtn.disabled = !dom.fileSelect.value;
+}
+
+function onFileSelect() {
+  dom.fileLoadBtn.disabled = !dom.fileSelect.value;
+}
+
+async function loadFile() {
+  const name = dom.fileSelect.value;
+  if (!name) return;
+  try {
+    const data = await api('/api/files/load', { name });
+    selected = null;
+    edgeStart = null;
+    showMode('');
+    syncState(data);
+    dom.directedToggle.checked = data.directed;
+    clearResult();
+    updateMetaPanel();
+    nodeCounter = 0;
+    syncNodeCounter();
+    closeSidebarIfMobile();
+  } catch(e) {
+    console.error('File load failed:', e);
+  }
+}
+
+function toggleSaveForm() {
+  const visible = dom.fileSaveForm.style.display !== 'none';
+  dom.fileSaveForm.style.display = visible ? 'none' : 'block';
+  if (!visible) {
+    // Pre-fill name from selected file.
+    dom.fileSaveName.value = dom.fileSelect.value || '';
+    dom.fileSaveStatus.textContent = '';
+    dom.fileSaveStatus.style.color = '';
+  }
+}
+
+async function saveFile() {
+  const name = dom.fileSaveName.value.trim();
+  if (!name) {
+    dom.fileSaveStatus.textContent = 'Name is required';
+    dom.fileSaveStatus.style.color = 'var(--red)';
+    return;
+  }
+  try {
+    await api('/api/files/save', { name });
+    dom.fileSaveStatus.textContent = 'Saved "' + name + '"';
+    dom.fileSaveStatus.style.color = 'var(--green)';
+    fetchFiles();
+    // Auto-select the saved file.
+    setTimeout(() => { dom.fileSelect.value = name; onFileSelect(); }, 200);
+  } catch(e) {
+    dom.fileSaveStatus.textContent = 'Error: ' + e.message;
+    dom.fileSaveStatus.style.color = 'var(--red)';
+  }
+}
+
 // ---- Templates ----
 let templateList = [];
 
@@ -2541,7 +2732,9 @@ function onMouseMove(e) {
     positionTooltip(pos.x, pos.y);
   } else if (edge) {
     const ed = state.edges.find(x => x.from === edge.from && x.to === edge.to);
-    let ttHtml = `<div class="tt-id">${esc(edge.from)} \u2192 ${esc(edge.to)}</div><div class="tt-detail">Weight: ${ed ? ed.weight : '?'}</div>`;
+    let ttHtml = `<div class="tt-id">${esc(edge.from)} \u2192 ${esc(edge.to)}</div>`;
+    if (ed && ed.label) ttHtml += `<div class="tt-detail">Label: ${esc(ed.label)}</div>`;
+    ttHtml += `<div class="tt-detail">Weight: ${ed ? ed.weight : '?'}</div>`;
     if (ed && ed.metaCount > 0) {
       ttHtml += `<div class="tt-detail">Metadata: ${ed.metaCount} entries</div>`;
     }
@@ -2760,7 +2953,25 @@ function onTouchEnd(e) {
 
 // ---- Event Handlers: Keyboard ----
 function onKeyDown(e) {
+  // Handle Escape in search input specially
+  if (e.key === 'Escape' && e.target === dom.searchInput) {
+    dom.searchInput.value = '';
+    searchQuery = '';
+    searchMatches.clear();
+    dom.searchCount.textContent = '';
+    dom.searchInput.blur();
+    render();
+    return;
+  }
+
   if (e.target.tagName === 'INPUT') return;
+
+  // '/' focuses search input
+  if (e.key === '/') {
+    e.preventDefault();
+    dom.searchInput.focus();
+    return;
+  }
 
   if (e.key === 'Escape') {
     if (metaFS.classList.contains('visible')) {
@@ -3107,6 +3318,13 @@ dom.exportBtn.addEventListener('click', exportGraph);
 dom.importBtn.addEventListener('click', () => dom.importFile.click());
 dom.importFile.addEventListener('change', handleImportFile);
 
+// File browser
+dom.fileSelect.addEventListener('change', onFileSelect);
+dom.fileLoadBtn.addEventListener('click', loadFile);
+dom.fileSaveBtn.addEventListener('click', toggleSaveForm);
+dom.fileSaveConfirmBtn.addEventListener('click', saveFile);
+dom.fileRefreshBtn.addEventListener('click', fetchFiles);
+
 // Directory upload
 $('dir-upload-btn').addEventListener('click', () => $('dir-upload-file').click());
 $('dir-upload-file').addEventListener('change', handleDirectoryUpload);
@@ -3114,6 +3332,9 @@ $('dir-upload-file').addEventListener('change', handleDirectoryUpload);
 // Templates
 dom.templateSelect.addEventListener('change', onTemplateSelect);
 dom.loadTemplateBtn.addEventListener('click', loadTemplate);
+
+// Search
+dom.searchInput.addEventListener('input', updateSearch);
 
 // Node/Edge forms
 $('add-node-btn').addEventListener('click', addNodeFromForm);
@@ -3169,6 +3390,7 @@ window.addEventListener('resize', resize);
 resize();
 fetchGraph();
 fetchTemplates();
+fetchFiles();
 // ---- Fullscreen Metadata Viewer ----
 const metaFS = document.getElementById('meta-fullscreen');
 const metaFSNodeLabel = document.getElementById('meta-fs-node-label');
