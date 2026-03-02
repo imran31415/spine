@@ -233,6 +233,22 @@ func Unmarshal[N, E any](data []byte) (*Graph[N, E], error) {
 	return g, nil
 }
 
+// FixupMapData re-parses node and edge data that json.Unmarshal may have
+// decoded as map[string]any instead of concrete types. The fixNode and fixEdge
+// functions convert the map representation to the proper typed value.
+func FixupMapData[N, E any](g *Graph[N, E], fixNode func(map[string]any) N, fixEdge func(map[string]any) E) {
+	for _, n := range g.Nodes() {
+		if m, ok := any(n.Data).(map[string]any); ok {
+			g.AddNode(n.ID, fixNode(m))
+		}
+	}
+	for _, e := range g.Edges() {
+		if m, ok := any(e.Data).(map[string]any); ok {
+			_ = g.AddEdge(e.From, e.To, fixEdge(m), e.Weight)
+		}
+	}
+}
+
 // ApplyMeta reads the metadata section from JSON and applies it to an existing graph.
 // Nodes and edges not present in the graph are silently skipped.
 func ApplyMeta[N, E any](data []byte, g *Graph[N, E]) error {

@@ -192,6 +192,88 @@ func TestDuplicateAddNode(t *testing.T) {
 	}
 }
 
+func TestSizeCounter(t *testing.T) {
+	// Directed: add, overwrite, remove
+	g := NewGraph[string, int](true)
+	g.AddNode("a", "A")
+	g.AddNode("b", "B")
+	g.AddNode("c", "C")
+
+	g.AddEdge("a", "b", 1, 1)
+	if g.Size() != 1 {
+		t.Fatalf("expected 1, got %d", g.Size())
+	}
+	// Overwrite same edge — size should stay 1
+	g.AddEdge("a", "b", 2, 2)
+	if g.Size() != 1 {
+		t.Fatalf("expected 1 after overwrite, got %d", g.Size())
+	}
+	g.AddEdge("b", "c", 1, 1)
+	if g.Size() != 2 {
+		t.Fatalf("expected 2, got %d", g.Size())
+	}
+	g.RemoveEdge("a", "b")
+	if g.Size() != 1 {
+		t.Fatalf("expected 1 after remove, got %d", g.Size())
+	}
+	// Remove non-existent edge — no change
+	g.RemoveEdge("a", "b")
+	if g.Size() != 1 {
+		t.Fatalf("expected 1 after duplicate remove, got %d", g.Size())
+	}
+
+	// Undirected: add, remove
+	u := NewGraph[string, int](false)
+	u.AddNode("x", "X")
+	u.AddNode("y", "Y")
+	u.AddEdge("x", "y", 1, 1)
+	if u.Size() != 1 {
+		t.Fatalf("undirected: expected 1, got %d", u.Size())
+	}
+	u.RemoveEdge("y", "x")
+	if u.Size() != 0 {
+		t.Fatalf("undirected: expected 0 after remove, got %d", u.Size())
+	}
+
+	// Self-loop
+	s := NewGraph[string, int](true)
+	s.AddNode("a", "A")
+	s.AddEdge("a", "a", 1, 1)
+	if s.Size() != 1 {
+		t.Fatalf("self-loop: expected 1, got %d", s.Size())
+	}
+	s.RemoveNode("a")
+	if s.Size() != 0 {
+		t.Fatalf("self-loop after RemoveNode: expected 0, got %d", s.Size())
+	}
+
+	// RemoveNode cascading
+	g2 := NewGraph[string, int](true)
+	g2.AddNode("a", "A")
+	g2.AddNode("b", "B")
+	g2.AddNode("c", "C")
+	g2.AddEdge("a", "b", 1, 1)
+	g2.AddEdge("b", "c", 1, 1)
+	g2.AddEdge("c", "b", 1, 1)
+	if g2.Size() != 3 {
+		t.Fatalf("expected 3, got %d", g2.Size())
+	}
+	g2.RemoveNode("b")
+	if g2.Size() != 0 {
+		t.Fatalf("expected 0 after removing b, got %d", g2.Size())
+	}
+
+	// Copy preserves size
+	g3 := NewGraph[string, int](true)
+	g3.AddNode("a", "A")
+	g3.AddNode("b", "B")
+	g3.AddEdge("a", "b", 1, 1)
+	c := g3.Copy()
+	if c.Size() != 1 {
+		t.Fatalf("copy: expected 1, got %d", c.Size())
+	}
+}
+
 func TestEmptyGraphOperations(t *testing.T) {
 	g := NewGraph[int, int](true)
 	g.RemoveNode("nonexistent")

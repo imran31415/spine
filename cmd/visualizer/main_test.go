@@ -183,6 +183,10 @@ func TestUpdateNodeStatus(t *testing.T) {
 	doJSON(t, s.handleUpdateNodeStatus, map[string]string{"id": "a", "status": "pending"})
 	doJSON(t, s.handleUpdateNodeStatus, map[string]string{"id": "b", "status": "pending"})
 
+	// Walk 'a' through valid transitions: pending -> ready -> running -> done
+	doJSON(t, s.handleUpdateNodeStatus, map[string]string{"id": "a", "status": "ready"})
+	doJSON(t, s.handleUpdateNodeStatus, map[string]string{"id": "a", "status": "running"})
+
 	// Mark 'a' as done — 'b' should auto-promote to ready.
 	w := doJSON(t, s.handleUpdateNodeStatus, map[string]string{"id": "a", "status": "done"})
 	resp := decodeGraphResp(t, w)
@@ -201,6 +205,25 @@ func TestUpdateNodeStatus(t *testing.T) {
 	}
 	if bStatus != "ready" {
 		t.Fatalf("expected node b auto-promoted to ready, got %q", bStatus)
+	}
+}
+
+func TestInvalidTransition(t *testing.T) {
+	s := newTestServer(t)
+	doJSON(t, s.handleAddNode, addNodeReq{ID: "a"})
+	// Set to pending
+	doJSON(t, s.handleUpdateNodeStatus, map[string]string{"id": "a", "status": "pending"})
+
+	// Try invalid transition: pending -> done (should be rejected)
+	w := doJSON(t, s.handleUpdateNodeStatus, map[string]string{"id": "a", "status": "done"})
+	if w.Code != 400 {
+		t.Fatalf("expected 400 for invalid transition, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Try valid transition: pending -> ready
+	w = doJSON(t, s.handleUpdateNodeStatus, map[string]string{"id": "a", "status": "ready"})
+	if w.Code != 200 {
+		t.Fatalf("expected 200 for valid transition, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

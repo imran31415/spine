@@ -120,8 +120,8 @@ func TestToolsList(t *testing.T) {
 	}
 	json.Unmarshal(b, &result)
 
-	if len(result.Tools) != 11 {
-		t.Errorf("expected 11 tools, got %d", len(result.Tools))
+	if len(result.Tools) != 21 {
+		t.Errorf("expected 21 tools, got %d", len(result.Tools))
 	}
 
 	names := make(map[string]bool)
@@ -132,6 +132,8 @@ func TestToolsList(t *testing.T) {
 		"open_graph", "save_graph", "list_graphs", "delete_graph",
 		"graph_summary", "upsert", "read_nodes", "transition", "remove",
 		"scc", "mst",
+		"bfs", "dfs", "shortest_path", "topological_sort", "cycle_detect",
+		"connected_components", "ancestors", "descendants", "roots", "leaves",
 	} {
 		if !names[expected] {
 			t.Errorf("missing tool: %s", expected)
@@ -349,6 +351,193 @@ func TestMST(t *testing.T) {
 	tcr := callTool(t, srv, "mst", map[string]any{"graph": "mst-test"})
 	if !tcr.IsError {
 		t.Fatal("expected error for MST on directed graph")
+	}
+}
+
+// setupDAG creates a graph "dag" with a->b->c for algorithm tests.
+func setupDAG(t *testing.T, srv *Server) {
+	t.Helper()
+	callTool(t, srv, "open_graph", map[string]any{"name": "dag"})
+	callTool(t, srv, "upsert", map[string]any{
+		"graph": "dag",
+		"nodes": []map[string]any{{"id": "a"}, {"id": "b"}, {"id": "c"}},
+		"edges": []map[string]any{
+			{"from": "a", "to": "b", "weight": 1.0},
+			{"from": "b", "to": "c", "weight": 2.0},
+		},
+	})
+}
+
+func TestBFS(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "bfs", map[string]any{"graph": "dag", "start": "a"})
+	if tcr.IsError {
+		t.Fatalf("bfs failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		Order []string `json:"order"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if len(result.Order) != 3 || result.Order[0] != "a" {
+		t.Fatalf("unexpected bfs order: %v", result.Order)
+	}
+}
+
+func TestDFS(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "dfs", map[string]any{"graph": "dag", "start": "a"})
+	if tcr.IsError {
+		t.Fatalf("dfs failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		Order []string `json:"order"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if len(result.Order) != 3 || result.Order[0] != "a" {
+		t.Fatalf("unexpected dfs order: %v", result.Order)
+	}
+}
+
+func TestShortestPath(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "shortest_path", map[string]any{"graph": "dag", "src": "a", "dst": "c"})
+	if tcr.IsError {
+		t.Fatalf("shortest_path failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		Path []string `json:"path"`
+		Cost float64  `json:"cost"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if len(result.Path) != 3 || result.Cost != 3.0 {
+		t.Fatalf("unexpected shortest_path: path=%v cost=%v", result.Path, result.Cost)
+	}
+}
+
+func TestTopologicalSort(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "topological_sort", map[string]any{"graph": "dag"})
+	if tcr.IsError {
+		t.Fatalf("topological_sort failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		Order []string `json:"order"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if len(result.Order) != 3 {
+		t.Fatalf("expected 3 nodes in topo sort, got %d", len(result.Order))
+	}
+}
+
+func TestCycleDetect(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	// DAG has no cycle
+	tcr := callTool(t, srv, "cycle_detect", map[string]any{"graph": "dag"})
+	if tcr.IsError {
+		t.Fatalf("cycle_detect failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		HasCycle bool     `json:"has_cycle"`
+		Cycle    []string `json:"cycle"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if result.HasCycle {
+		t.Fatalf("expected no cycle, got cycle: %v", result.Cycle)
+	}
+}
+
+func TestConnectedComponents(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "connected_components", map[string]any{"graph": "dag"})
+	if tcr.IsError {
+		t.Fatalf("connected_components failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		Components [][]string `json:"components"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if len(result.Components) != 1 {
+		t.Fatalf("expected 1 component, got %d", len(result.Components))
+	}
+}
+
+func TestAncestors(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "ancestors", map[string]any{"graph": "dag", "id": "c"})
+	if tcr.IsError {
+		t.Fatalf("ancestors failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		Ancestors []string `json:"ancestors"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if len(result.Ancestors) != 2 {
+		t.Fatalf("expected 2 ancestors, got %d: %v", len(result.Ancestors), result.Ancestors)
+	}
+}
+
+func TestDescendants(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "descendants", map[string]any{"graph": "dag", "id": "a"})
+	if tcr.IsError {
+		t.Fatalf("descendants failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		Descendants []string `json:"descendants"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if len(result.Descendants) != 2 {
+		t.Fatalf("expected 2 descendants, got %d: %v", len(result.Descendants), result.Descendants)
+	}
+}
+
+func TestRoots(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "roots", map[string]any{"graph": "dag"})
+	if tcr.IsError {
+		t.Fatalf("roots failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		Roots []string `json:"roots"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if len(result.Roots) != 1 || result.Roots[0] != "a" {
+		t.Fatalf("expected root [a], got %v", result.Roots)
+	}
+}
+
+func TestLeaves(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "leaves", map[string]any{"graph": "dag"})
+	if tcr.IsError {
+		t.Fatalf("leaves failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		Leaves []string `json:"leaves"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if len(result.Leaves) != 1 || result.Leaves[0] != "c" {
+		t.Fatalf("expected leaf [c], got %v", result.Leaves)
 	}
 }
 

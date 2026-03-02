@@ -5,7 +5,8 @@ func (s *Server) registerTools() {
 		map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"name": map[string]any{"type": "string", "description": "Graph name"},
+				"name":     map[string]any{"type": "string", "description": "Graph name"},
+				"directed": map[string]any{"type": "boolean", "description": "Whether the graph is directed (default true)"},
 			},
 			"required": []string{"name"},
 		}, s.handleOpenGraph)
@@ -156,4 +157,100 @@ func (s *Server) registerTools() {
 			},
 			"required": []string{"graph"},
 		}, s.handleMST)
+
+	s.addTool("bfs", "Breadth-first search traversal from a start node",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+				"start": map[string]any{"type": "string", "description": "Start node ID"},
+			},
+			"required": []string{"graph", "start"},
+		}, s.handleBFS)
+
+	s.addTool("dfs", "Depth-first search traversal from a start node",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+				"start": map[string]any{"type": "string", "description": "Start node ID"},
+			},
+			"required": []string{"graph", "start"},
+		}, s.handleDFS)
+
+	s.addTool("shortest_path", "Find shortest path between two nodes (Dijkstra)",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+				"src":   map[string]any{"type": "string", "description": "Source node ID"},
+				"dst":   map[string]any{"type": "string", "description": "Destination node ID"},
+			},
+			"required": []string{"graph", "src", "dst"},
+		}, s.handleShortestPath)
+
+	s.addTool("topological_sort", "Compute topological ordering of a directed acyclic graph",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+			},
+			"required": []string{"graph"},
+		}, s.handleTopologicalSort)
+
+	s.addTool("cycle_detect", "Detect cycles in the graph",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+			},
+			"required": []string{"graph"},
+		}, s.handleCycleDetect)
+
+	s.addTool("connected_components", "Find connected components of the graph",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+			},
+			"required": []string{"graph"},
+		}, s.handleConnectedComponents)
+
+	s.addTool("ancestors", "Find all ancestor nodes of a given node",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+				"id":    map[string]any{"type": "string", "description": "Node ID"},
+			},
+			"required": []string{"graph", "id"},
+		}, s.handleAncestors)
+
+	s.addTool("descendants", "Find all descendant nodes of a given node",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+				"id":    map[string]any{"type": "string", "description": "Node ID"},
+			},
+			"required": []string{"graph", "id"},
+		}, s.handleDescendants)
+
+	s.addTool("roots", "Find all root nodes (no incoming edges)",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+			},
+			"required": []string{"graph"},
+		}, s.handleRoots)
+
+	s.addTool("leaves", "Find all leaf nodes (no outgoing edges)",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+			},
+			"required": []string{"graph"},
+		}, s.handleLeaves)
 }
