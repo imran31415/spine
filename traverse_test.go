@@ -182,8 +182,48 @@ func TestCycleDetect(t *testing.T) {
 	if !hasCycle {
 		t.Fatal("expected cycle")
 	}
+	if len(cycle) != 3 {
+		t.Fatalf("expected 3-node cycle, got %v", cycle)
+	}
+	// Verify cycle is complete: each node in cycle should have an edge to the next,
+	// and the last should have an edge back to the first.
+	for i := 0; i < len(cycle); i++ {
+		from := cycle[i]
+		to := cycle[(i+1)%len(cycle)]
+		if !g.HasEdge(from, to) {
+			t.Fatalf("cycle broken: no edge %s -> %s in cycle %v", from, to, cycle)
+		}
+	}
+}
+
+func TestCycleDetectNestedCycle(t *testing.T) {
+	// x -> a -> b -> c -> d -> b (cycle is b->c->d->b, not involving x or a)
+	g := NewGraph[int, int](true)
+	g.AddNode("x", 0)
+	g.AddNode("a", 1)
+	g.AddNode("b", 2)
+	g.AddNode("c", 3)
+	g.AddNode("d", 4)
+	g.AddEdge("x", "a", 0, 0)
+	g.AddEdge("a", "b", 0, 0)
+	g.AddEdge("b", "c", 0, 0)
+	g.AddEdge("c", "d", 0, 0)
+	g.AddEdge("d", "b", 0, 0)
+
+	hasCycle, cycle := CycleDetect(g)
+	if !hasCycle {
+		t.Fatal("expected cycle")
+	}
 	if len(cycle) < 2 {
 		t.Fatalf("cycle too short: %v", cycle)
+	}
+	// Verify cycle is valid: each consecutive pair has an edge
+	for i := 0; i < len(cycle); i++ {
+		from := cycle[i]
+		to := cycle[(i+1)%len(cycle)]
+		if !g.HasEdge(from, to) {
+			t.Fatalf("cycle broken: no edge %s -> %s in cycle %v", from, to, cycle)
+		}
 	}
 }
 
@@ -389,6 +429,136 @@ func TestMSTDisconnected(t *testing.T) {
 	}
 	if total != 3.0 {
 		t.Fatalf("expected total weight 3, got %f", total)
+	}
+}
+
+func TestAllPairsShortestPaths(t *testing.T) {
+	g := NewGraph[string, int](true)
+	for _, id := range []string{"a", "b", "c"} {
+		g.AddNode(id, id)
+	}
+	g.AddEdge("a", "b", 0, 1)
+	g.AddEdge("b", "c", 0, 2)
+	g.AddEdge("a", "c", 0, 10) // longer direct path
+
+	result, err := AllPairsShortestPaths(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// a->c via b should be 3, not 10
+	if result.Dist["a"]["c"] != 3 {
+		t.Fatalf("expected dist a->c = 3, got %f", result.Dist["a"]["c"])
+	}
+	if result.Dist["a"]["b"] != 1 {
+		t.Fatalf("expected dist a->b = 1, got %f", result.Dist["a"]["b"])
+	}
+}
+
+func TestAllPairsReconstructPath(t *testing.T) {
+	g := NewGraph[string, int](true)
+	for _, id := range []string{"a", "b", "c"} {
+		g.AddNode(id, id)
+	}
+	g.AddEdge("a", "b", 0, 1)
+	g.AddEdge("b", "c", 0, 2)
+	g.AddEdge("a", "c", 0, 10)
+
+	result, err := AllPairsShortestPaths(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := ReconstructPath(result, "a", "c")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(path) != 3 || path[0] != "a" || path[1] != "b" || path[2] != "c" {
+		t.Fatalf("expected [a b c], got %v", path)
+	}
+}
+
+func TestAllPairsNoPath(t *testing.T) {
+	g := NewGraph[string, int](true)
+	g.AddNode("a", "A")
+	g.AddNode("b", "B")
+
+	result, err := AllPairsShortestPaths(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = ReconstructPath(result, "a", "b")
+	if err == nil {
+		t.Fatal("expected error for no path")
+	}
+}
+
+func TestCriticalPath(t *testing.T) {
+	// DAG: a->b(3), a->c(2), b->d(1), c->d(4)
+	// Critical path: a->c->d (length 6)
+	g := NewGraph[string, int](true)
+	for _, id := range []string{"a", "b", "c", "d"} {
+		g.AddNode(id, id)
+	}
+	g.AddEdge("a", "b", 0, 3)
+	g.AddEdge("a", "c", 0, 2)
+	g.AddEdge("b", "d", 0, 1)
+	g.AddEdge("c", "d", 0, 4)
+
+	result, err := CriticalPath(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Length != 6 {
+		t.Fatalf("expected critical path length 6, got %f", result.Length)
+	}
+	// a and d must be on the critical path
+	if indexOf(result.Path, "a") < 0 || indexOf(result.Path, "d") < 0 {
+		t.Fatalf("expected a and d on critical path, got %v", result.Path)
+	}
+	// c should be on critical path (a->c->d = 6 vs a->b->d = 4)
+	if indexOf(result.Path, "c") < 0 {
+		t.Fatalf("expected c on critical path, got %v", result.Path)
+	}
+}
+
+func TestCriticalPathLinear(t *testing.T) {
+	g := NewGraph[string, int](true)
+	for _, id := range []string{"a", "b", "c"} {
+		g.AddNode(id, id)
+	}
+	g.AddEdge("a", "b", 0, 5)
+	g.AddEdge("b", "c", 0, 3)
+
+	result, err := CriticalPath(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Length != 8 {
+		t.Fatalf("expected length 8, got %f", result.Length)
+	}
+	// All nodes on critical path
+	if len(result.Path) != 3 {
+		t.Fatalf("expected 3 nodes on critical path, got %v", result.Path)
+	}
+}
+
+func TestCriticalPathUndirectedError(t *testing.T) {
+	g := NewGraph[int, int](false)
+	_, err := CriticalPath(g)
+	if err == nil {
+		t.Fatal("expected error for undirected graph")
+	}
+}
+
+func TestCriticalPathCycleError(t *testing.T) {
+	g := NewGraph[int, int](true)
+	g.AddNode("a", 1)
+	g.AddNode("b", 2)
+	g.AddEdge("a", "b", 0, 1)
+	g.AddEdge("b", "a", 0, 1)
+
+	_, err := CriticalPath(g)
+	if err == nil {
+		t.Fatal("expected error for cyclic graph")
 	}
 }
 

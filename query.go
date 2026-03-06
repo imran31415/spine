@@ -1,6 +1,10 @@
 package spine
 
-import "sort"
+import (
+	"errors"
+	"fmt"
+	"sort"
+)
 
 // FilterNodes returns all nodes matching the predicate.
 func FilterNodes[N, E any](g *Graph[N, E], pred func(Node[N]) bool) []Node[N] {
@@ -24,8 +28,8 @@ func FilterEdges[N, E any](g *Graph[N, E], pred func(Edge[E]) bool) []Edge[E] {
 	return result
 }
 
-// Ancestors returns all transitive predecessors of the given node in a directed graph.
-// For undirected graphs, this returns all reachable nodes.
+// Ancestors returns all transitive predecessors of the given node in a directed graph,
+// sorted by ID. For undirected graphs, this returns all reachable nodes.
 func Ancestors[N, E any](g *Graph[N, E], id string) []string {
 	visited := make(map[string]bool)
 	var walk func(string)
@@ -43,10 +47,12 @@ func Ancestors[N, E any](g *Graph[N, E], id string) []string {
 	for v := range visited {
 		result = append(result, v)
 	}
+	sort.Strings(result)
 	return result
 }
 
-// Descendants returns all transitive successors of the given node in a directed graph.
+// Descendants returns all transitive successors of the given node in a directed graph,
+// sorted by ID.
 func Descendants[N, E any](g *Graph[N, E], id string) []string {
 	visited := make(map[string]bool)
 	var walk func(string)
@@ -64,6 +70,7 @@ func Descendants[N, E any](g *Graph[N, E], id string) []string {
 	for v := range visited {
 		result = append(result, v)
 	}
+	sort.Strings(result)
 	return result
 }
 
@@ -200,6 +207,235 @@ func GraphAnalytics[N, E any](g *Graph[N, E]) Analytics {
 	}
 
 	return a
+}
+
+// TransitiveClosure computes the transitive closure of a directed graph.
+// Returns a new graph where an edge u->v exists if v is reachable from u.
+func TransitiveClosure[N, E any](g *Graph[N, E]) (*Graph[N, E], error) {
+	if !g.Directed {
+		return nil, errors.New("transitive closure requires a directed graph")
+	}
+
+	tc := NewGraph[N, E](true)
+	for _, n := range g.Nodes() {
+		tc.AddNode(n.ID, n.Data)
+	}
+
+	// BFS from each node
+	for _, n := range g.Nodes() {
+		visited := make(map[string]bool)
+		queue := []string{n.ID}
+		visited[n.ID] = true
+		for len(queue) > 0 {
+			cur := queue[0]
+			queue = queue[1:]
+			for _, nb := range g.Neighbors(cur) {
+				if !visited[nb] {
+					visited[nb] = true
+					queue = append(queue, nb)
+				}
+			}
+		}
+		for v := range visited {
+			if v != n.ID {
+				var zero E
+				tc.AddEdge(n.ID, v, zero, 1)
+			}
+		}
+	}
+
+	return tc, nil
+}
+
+// ValidationError represents a single graph validation issue.
+type ValidationError struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
+	NodeID  string `json:"node_id,omitempty"`
+	From    string `json:"from,omitempty"`
+	To      string `json:"to,omitempty"`
+}
+
+// ValidationResult holds the result of graph validation.
+type ValidationResult struct {
+	Valid  bool              `json:"valid"`
+	Errors []ValidationError `json:"errors,omitempty"`
+}
+
+// Validate checks the internal consistency of a graph.
+func Validate[N, E any](g *Graph[N, E]) ValidationResult {
+	var errs []ValidationError
+
+	// Check that every edge endpoint exists in nodes
+	for from, m := range g.out {
+		if !g.HasNode(from) {
+			errs = append(errs, ValidationError{
+				Type:    "dangling_edge",
+				Message: fmt.Sprintf("edge source %q not in nodes map", from),
+				From:    from,
+			})
+		}
+		for to := range m {
+			if !g.HasNode(to) {
+				errs = append(errs, ValidationError{
+					Type:    "dangling_edge",
+					Message: fmt.Sprintf("edge target %q not in nodes map", to),
+					To:      to,
+					From:    from,
+				})
+			}
+		}
+	}
+
+	// Check out/in map symmetry
+	for from, m := range g.out {
+		for to := range m {
+			if _, ok := g.in[to][from]; !ok {
+				errs = append(errs, ValidationError{
+					Type:    "inconsistent_in_out",
+					Message: fmt.Sprintf("edge %q->%q in out map but not in in map", from, to),
+					From:    from,
+					To:      to,
+				})
+			}
+		}
+	}
+	for to, m := range g.in {
+		for from := range m {
+			if _, ok := g.out[from][to]; !ok {
+				errs = append(errs, ValidationError{
+					Type:    "inconsistent_in_out",
+					Message: fmt.Sprintf("edge %q->%q in in map but not in out map", from, to),
+					From:    from,
+					To:      to,
+				})
+			}
+		}
+	}
+
+	// Check rawEdgeCount matches actual count
+	actualCount := 0
+	for _, m := range g.out {
+		actualCount += len(m)
+	}
+	if actualCount != g.rawEdgeCount {
+		errs = append(errs, ValidationError{
+			Type:    "count_mismatch",
+			Message: fmt.Sprintf("rawEdgeCount=%d but actual out entries=%d", g.rawEdgeCount, actualCount),
+		})
+	}
+
+	// Sort errors for deterministic output
+	sort.Slice(errs, func(i, j int) bool {
+		if errs[i].Type != errs[j].Type {
+			return errs[i].Type < errs[j].Type
+		}
+		return errs[i].Message < errs[j].Message
+	})
+
+	return ValidationResult{
+		Valid:  len(errs) == 0,
+		Errors: errs,
+	}
+}
+
+// DiffResult describes the differences between two graphs.
+type DiffResult struct {
+	NodesAdded    []string       `json:"nodes_added"`
+	NodesRemoved  []string       `json:"nodes_removed"`
+	EdgesAdded    [][2]string    `json:"edges_added"`
+	EdgesRemoved  [][2]string    `json:"edges_removed"`
+	WeightChanges []WeightChange `json:"weight_changes,omitempty"`
+}
+
+// WeightChange describes a weight difference for a shared edge.
+type WeightChange struct {
+	From      string  `json:"from"`
+	To        string  `json:"to"`
+	OldWeight float64 `json:"old_weight"`
+	NewWeight float64 `json:"new_weight"`
+}
+
+// Diff computes the differences between two graphs.
+func Diff[N, E any](a, b *Graph[N, E]) (*DiffResult, error) {
+	if a.Directed != b.Directed {
+		return nil, errors.New("cannot diff graphs with different directed modes")
+	}
+
+	result := &DiffResult{}
+
+	// Node differences
+	aNodes := make(map[string]bool)
+	for _, n := range a.Nodes() {
+		aNodes[n.ID] = true
+	}
+	bNodes := make(map[string]bool)
+	for _, n := range b.Nodes() {
+		bNodes[n.ID] = true
+	}
+
+	for id := range bNodes {
+		if !aNodes[id] {
+			result.NodesAdded = append(result.NodesAdded, id)
+		}
+	}
+	sort.Strings(result.NodesAdded)
+
+	for id := range aNodes {
+		if !bNodes[id] {
+			result.NodesRemoved = append(result.NodesRemoved, id)
+		}
+	}
+	sort.Strings(result.NodesRemoved)
+
+	// Edge differences
+	aEdges := make(map[[2]string]float64)
+	for _, e := range a.Edges() {
+		aEdges[[2]string{e.From, e.To}] = e.Weight
+	}
+	bEdges := make(map[[2]string]float64)
+	for _, e := range b.Edges() {
+		bEdges[[2]string{e.From, e.To}] = e.Weight
+	}
+
+	for key, bw := range bEdges {
+		if aw, ok := aEdges[key]; !ok {
+			result.EdgesAdded = append(result.EdgesAdded, key)
+		} else if aw != bw {
+			result.WeightChanges = append(result.WeightChanges, WeightChange{
+				From:      key[0],
+				To:        key[1],
+				OldWeight: aw,
+				NewWeight: bw,
+			})
+		}
+	}
+	sort.Slice(result.EdgesAdded, func(i, j int) bool {
+		if result.EdgesAdded[i][0] != result.EdgesAdded[j][0] {
+			return result.EdgesAdded[i][0] < result.EdgesAdded[j][0]
+		}
+		return result.EdgesAdded[i][1] < result.EdgesAdded[j][1]
+	})
+	sort.Slice(result.WeightChanges, func(i, j int) bool {
+		if result.WeightChanges[i].From != result.WeightChanges[j].From {
+			return result.WeightChanges[i].From < result.WeightChanges[j].From
+		}
+		return result.WeightChanges[i].To < result.WeightChanges[j].To
+	})
+
+	for key := range aEdges {
+		if _, ok := bEdges[key]; !ok {
+			result.EdgesRemoved = append(result.EdgesRemoved, key)
+		}
+	}
+	sort.Slice(result.EdgesRemoved, func(i, j int) bool {
+		if result.EdgesRemoved[i][0] != result.EdgesRemoved[j][0] {
+			return result.EdgesRemoved[i][0] < result.EdgesRemoved[j][0]
+		}
+		return result.EdgesRemoved[i][1] < result.EdgesRemoved[j][1]
+	})
+
+	return result, nil
 }
 
 // bfsMaxDist returns the maximum distance from start to any reachable node.

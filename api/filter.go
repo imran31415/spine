@@ -50,12 +50,12 @@ func matchFilter(store *spine.Store, data NodeData, f MetaFilter) bool {
 		if !found {
 			return false
 		}
-		return fmt.Sprintf("%v", val) == fmt.Sprintf("%v", f.Value)
+		return valuesEqual(val, f.Value)
 	case "neq":
 		if !found {
 			return true
 		}
-		return fmt.Sprintf("%v", val) != fmt.Sprintf("%v", f.Value)
+		return !valuesEqual(val, f.Value)
 	case "contains":
 		if !found {
 			return false
@@ -72,6 +72,18 @@ func matchFilter(store *spine.Store, data NodeData, f MetaFilter) bool {
 	default:
 		return false
 	}
+}
+
+// valuesEqual compares two values for equality, using numeric comparison
+// when both values are numeric to avoid string formatting mismatches
+// (e.g., float64(1) vs int(1)).
+func valuesEqual(a, b any) bool {
+	af, aOK := toFloat64(a)
+	bf, bOK := toFloat64(b)
+	if aOK && bOK {
+		return af == bf
+	}
+	return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
 }
 
 // compareFloat returns -2 if comparison is impossible, otherwise -1, 0, 1.
@@ -102,9 +114,23 @@ func toFloat64(v any) (float64, bool) {
 		return float64(n), true
 	case int:
 		return float64(n), true
-	case int64:
+	case int8:
+		return float64(n), true
+	case int16:
 		return float64(n), true
 	case int32:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case uint:
+		return float64(n), true
+	case uint8:
+		return float64(n), true
+	case uint16:
+		return float64(n), true
+	case uint32:
+		return float64(n), true
+	case uint64:
 		return float64(n), true
 	case json_number:
 		f, err := n.Float64()

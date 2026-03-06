@@ -1,6 +1,7 @@
 package spine
 
 import (
+	"math"
 	"sort"
 	"testing"
 )
@@ -210,3 +211,114 @@ func TestGraphAnalyticsEmpty(t *testing.T) {
 		t.Fatalf("expected empty analytics, got %+v", a)
 	}
 }
+
+func TestTransitiveClosure(t *testing.T) {
+	g := NewGraph[string, int](true)
+	for _, id := range []string{"a", "b", "c", "d"} {
+		g.AddNode(id, id)
+	}
+	g.AddEdge("a", "b", 0, 1)
+	g.AddEdge("b", "c", 0, 1)
+	g.AddEdge("c", "d", 0, 1)
+
+	tc, err := TransitiveClosure(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// a can reach b, c, d
+	if !tc.HasEdge("a", "b") || !tc.HasEdge("a", "c") || !tc.HasEdge("a", "d") {
+		t.Fatal("expected a to reach b, c, d")
+	}
+	// b can reach c, d
+	if !tc.HasEdge("b", "c") || !tc.HasEdge("b", "d") {
+		t.Fatal("expected b to reach c, d")
+	}
+	// c can reach d
+	if !tc.HasEdge("c", "d") {
+		t.Fatal("expected c to reach d")
+	}
+	// d can't reach anyone
+	if tc.HasEdge("d", "a") || tc.HasEdge("d", "b") || tc.HasEdge("d", "c") {
+		t.Fatal("d should not reach anyone")
+	}
+}
+
+func TestTransitiveClosureUndirectedError(t *testing.T) {
+	g := NewGraph[int, int](false)
+	_, err := TransitiveClosure(g)
+	if err == nil {
+		t.Fatal("expected error for undirected graph")
+	}
+}
+
+func TestValidate(t *testing.T) {
+	g := NewGraph[string, int](true)
+	g.AddNode("a", "A")
+	g.AddNode("b", "B")
+	g.AddEdge("a", "b", 0, 1)
+
+	result := Validate(g)
+	if !result.Valid {
+		t.Fatalf("expected valid graph, got errors: %v", result.Errors)
+	}
+}
+
+func TestValidateEmpty(t *testing.T) {
+	g := NewGraph[int, int](true)
+	result := Validate(g)
+	if !result.Valid {
+		t.Fatal("expected empty graph to be valid")
+	}
+}
+
+func TestDiff(t *testing.T) {
+	a := NewGraph[string, int](true)
+	for _, id := range []string{"a", "b", "c"} {
+		a.AddNode(id, id)
+	}
+	a.AddEdge("a", "b", 0, 1)
+	a.AddEdge("b", "c", 0, 2)
+
+	b := NewGraph[string, int](true)
+	for _, id := range []string{"a", "b", "d"} {
+		b.AddNode(id, id)
+	}
+	b.AddEdge("a", "b", 0, 5) // weight changed
+	b.AddEdge("a", "d", 0, 1) // new edge
+
+	result, err := Diff(a, b)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result.NodesAdded) != 1 || result.NodesAdded[0] != "d" {
+		t.Fatalf("expected nodes added [d], got %v", result.NodesAdded)
+	}
+	if len(result.NodesRemoved) != 1 || result.NodesRemoved[0] != "c" {
+		t.Fatalf("expected nodes removed [c], got %v", result.NodesRemoved)
+	}
+	if len(result.EdgesAdded) != 1 {
+		t.Fatalf("expected 1 edge added, got %v", result.EdgesAdded)
+	}
+	if len(result.EdgesRemoved) != 1 {
+		t.Fatalf("expected 1 edge removed, got %v", result.EdgesRemoved)
+	}
+	if len(result.WeightChanges) != 1 {
+		t.Fatalf("expected 1 weight change, got %v", result.WeightChanges)
+	}
+	if result.WeightChanges[0].OldWeight != 1 || result.WeightChanges[0].NewWeight != 5 {
+		t.Fatalf("expected weight change 1->5, got %v", result.WeightChanges[0])
+	}
+}
+
+func TestDiffMixedDirectedError(t *testing.T) {
+	a := NewGraph[int, int](true)
+	b := NewGraph[int, int](false)
+	_, err := Diff(a, b)
+	if err == nil {
+		t.Fatal("expected error for mixed directed modes")
+	}
+}
+
+// Suppress unused import warning
+var _ = math.Abs

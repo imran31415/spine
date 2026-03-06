@@ -182,23 +182,25 @@ func (g *Graph[N, E]) Neighbors(id string) []string {
 	return result
 }
 
-// OutEdges returns all edges originating from the given node.
+// OutEdges returns all edges originating from the given node, sorted by target ID.
 func (g *Graph[N, E]) OutEdges(id string) []Edge[E] {
 	m := g.out[id]
 	result := make([]Edge[E], 0, len(m))
 	for _, e := range m {
 		result = append(result, e)
 	}
+	sort.Slice(result, func(i, j int) bool { return result[i].To < result[j].To })
 	return result
 }
 
-// InEdges returns all edges pointing to the given node.
+// InEdges returns all edges pointing to the given node, sorted by source ID.
 func (g *Graph[N, E]) InEdges(id string) []Edge[E] {
 	m := g.in[id]
 	result := make([]Edge[E], 0, len(m))
 	for _, e := range m {
 		result = append(result, e)
 	}
+	sort.Slice(result, func(i, j int) bool { return result[i].From < result[j].From })
 	return result
 }
 

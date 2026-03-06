@@ -3,6 +3,7 @@ package spine
 import (
 	"container/heap"
 	"errors"
+	"math"
 	"sort"
 )
 
@@ -167,8 +168,10 @@ func TopologicalSort[N, E any](g *Graph[N, E]) ([]string, error) {
 		for _, nb := range neighbors {
 			inDeg[nb]--
 			if inDeg[nb] == 0 {
-				queue = append(queue, nb)
-				sort.Strings(queue)
+				idx := sort.SearchStrings(queue, nb)
+				queue = append(queue, "")
+				copy(queue[idx+1:], queue[idx:])
+				queue[idx] = nb
 			}
 		}
 	}
@@ -429,6 +432,197 @@ func MinimumSpanningTree[N, E any](g *Graph[N, E]) ([]Edge[E], float64, error) {
 		}
 	}
 	return mst, totalWeight, nil
+}
+
+// AllPairsResult holds the result of all-pairs shortest paths (Floyd-Warshall).
+type AllPairsResult struct {
+	Dist map[string]map[string]float64 `json:"dist"`
+	Next map[string]map[string]string  `json:"next"`
+}
+
+// AllPairsShortestPaths computes shortest paths between all pairs using Floyd-Warshall.
+// Returns error if a negative cycle is detected.
+func AllPairsShortestPaths[N, E any](g *Graph[N, E]) (*AllPairsResult, error) {
+	nodes := g.Nodes()
+	n := len(nodes)
+	ids := make([]string, n)
+	for i, nd := range nodes {
+		ids[i] = nd.ID
+	}
+
+	dist := make(map[string]map[string]float64, n)
+	next := make(map[string]map[string]string, n)
+	for _, u := range ids {
+		dist[u] = make(map[string]float64, n)
+		next[u] = make(map[string]string, n)
+		for _, v := range ids {
+			if u == v {
+				dist[u][v] = 0
+			} else {
+				dist[u][v] = math.Inf(1)
+			}
+		}
+	}
+
+	for _, e := range g.Edges() {
+		if e.Weight < dist[e.From][e.To] {
+			dist[e.From][e.To] = e.Weight
+			next[e.From][e.To] = e.To
+		}
+		if !g.Directed {
+			if e.Weight < dist[e.To][e.From] {
+				dist[e.To][e.From] = e.Weight
+				next[e.To][e.From] = e.From
+			}
+		}
+	}
+
+	// Floyd-Warshall
+	for _, k := range ids {
+		for _, i := range ids {
+			for _, j := range ids {
+				if dist[i][k]+dist[k][j] < dist[i][j] {
+					dist[i][j] = dist[i][k] + dist[k][j]
+					next[i][j] = next[i][k]
+				}
+			}
+		}
+	}
+
+	// Check for negative cycles
+	for _, u := range ids {
+		if dist[u][u] < 0 {
+			return nil, errors.New("graph contains a negative cycle")
+		}
+	}
+
+	// Remove infinite distances (unreachable pairs) for JSON compatibility
+	for u := range dist {
+		for v, d := range dist[u] {
+			if math.IsInf(d, 1) {
+				delete(dist[u], v)
+				delete(next[u], v)
+			}
+		}
+	}
+
+	return &AllPairsResult{Dist: dist, Next: next}, nil
+}
+
+// ReconstructPath reconstructs the shortest path from src to dst using the Next matrix.
+func ReconstructPath(result *AllPairsResult, src, dst string) ([]string, error) {
+	if _, ok := result.Dist[src]; !ok {
+		return nil, errors.New("source node not found in result")
+	}
+	if _, ok := result.Dist[dst]; !ok {
+		return nil, errors.New("destination node not found in result")
+	}
+	d, ok := result.Dist[src][dst]
+	if !ok || math.IsInf(d, 1) {
+		return nil, errors.New("no path found")
+	}
+	if src == dst {
+		return []string{src}, nil
+	}
+
+	path := []string{src}
+	cur := src
+	for cur != dst {
+		nxt, ok := result.Next[cur][dst]
+		if !ok || nxt == "" {
+			return nil, errors.New("no path found")
+		}
+		path = append(path, nxt)
+		cur = nxt
+		if len(path) > len(result.Dist)+1 {
+			return nil, errors.New("path reconstruction loop detected")
+		}
+	}
+	return path, nil
+}
+
+// CriticalPathResult holds the critical path analysis result.
+type CriticalPathResult struct {
+	Path      []string           `json:"path"`
+	Length    float64            `json:"length"`
+	NodeSlack map[string]float64 `json:"node_slack"`
+}
+
+// CriticalPath computes the critical path in a DAG.
+// Edge weights represent task durations. Returns error if graph has cycles or is undirected.
+func CriticalPath[N, E any](g *Graph[N, E]) (*CriticalPathResult, error) {
+	if !g.Directed {
+		return nil, errors.New("critical path requires a directed graph")
+	}
+
+	order, err := TopologicalSort(g)
+	if err != nil {
+		return nil, err
+	}
+
+	n := len(order)
+	if n == 0 {
+		return &CriticalPathResult{
+			Path:      nil,
+			Length:    0,
+			NodeSlack: map[string]float64{},
+		}, nil
+	}
+
+	// Forward pass: compute earliest start time
+	earliest := make(map[string]float64, n)
+	for _, id := range order {
+		earliest[id] = 0
+	}
+	for _, id := range order {
+		for _, e := range g.OutEdges(id) {
+			if earliest[id]+e.Weight > earliest[e.To] {
+				earliest[e.To] = earliest[id] + e.Weight
+			}
+		}
+	}
+
+	// Find the maximum earliest time (project duration)
+	maxTime := 0.0
+	for _, t := range earliest {
+		if t > maxTime {
+			maxTime = t
+		}
+	}
+
+	// Backward pass: compute latest start time
+	latest := make(map[string]float64, n)
+	for _, id := range order {
+		latest[id] = maxTime
+	}
+	for i := n - 1; i >= 0; i-- {
+		id := order[i]
+		for _, e := range g.OutEdges(id) {
+			if latest[e.To]-e.Weight < latest[id] {
+				latest[id] = latest[e.To] - e.Weight
+			}
+		}
+	}
+
+	// Compute slack and find critical path
+	slack := make(map[string]float64, n)
+	for _, id := range order {
+		slack[id] = latest[id] - earliest[id]
+	}
+
+	// Critical path: nodes with zero slack, in topological order
+	var critPath []string
+	for _, id := range order {
+		if slack[id] == 0 {
+			critPath = append(critPath, id)
+		}
+	}
+
+	return &CriticalPathResult{
+		Path:      critPath,
+		Length:    maxTime,
+		NodeSlack: slack,
+	}, nil
 }
 
 // ConnectedComponents returns the connected components of the graph

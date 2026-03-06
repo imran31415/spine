@@ -253,4 +253,142 @@ func (s *Server) registerTools() {
 			},
 			"required": []string{"graph"},
 		}, s.handleLeaves)
+
+	s.addTool("transitive_closure", "Compute the transitive closure of a directed graph",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+			},
+			"required": []string{"graph"},
+		}, s.handleTransitiveClosure)
+
+	s.addTool("validate_graph", "Validate internal consistency of a graph",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+			},
+			"required": []string{"graph"},
+		}, s.handleValidateGraph)
+
+	s.addTool("diff_graphs", "Compute differences between two graphs",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph_a": map[string]any{"type": "string", "description": "First graph name"},
+				"graph_b": map[string]any{"type": "string", "description": "Second graph name"},
+			},
+			"required": []string{"graph_a", "graph_b"},
+		}, s.handleDiffGraphs)
+
+	s.addTool("degree_centrality", "Compute degree centrality for all nodes",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+			},
+			"required": []string{"graph"},
+		}, s.handleDegreeCentrality)
+
+	s.addTool("betweenness_centrality", "Compute betweenness centrality for all nodes",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+			},
+			"required": []string{"graph"},
+		}, s.handleBetweennessCentrality)
+
+	s.addTool("closeness_centrality", "Compute closeness centrality for all nodes",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+			},
+			"required": []string{"graph"},
+		}, s.handleClosenessCentrality)
+
+	s.addTool("pagerank", "Compute PageRank scores for all nodes",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph":     map[string]any{"type": "string", "description": "Graph name"},
+				"damping":   map[string]any{"type": "number", "description": "Damping factor (default 0.85)"},
+				"max_iter":  map[string]any{"type": "integer", "description": "Maximum iterations (default 100)"},
+				"tolerance": map[string]any{"type": "number", "description": "Convergence tolerance (default 1e-6)"},
+			},
+			"required": []string{"graph"},
+		}, s.handlePageRank)
+
+	s.addTool("all_pairs_shortest_paths", "Compute shortest paths between all pairs of nodes (Floyd-Warshall)",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+			},
+			"required": []string{"graph"},
+		}, s.handleAllPairsShortestPaths)
+
+	s.addTool("critical_path", "Compute the critical path in a DAG",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+			},
+			"required": []string{"graph"},
+		}, s.handleCriticalPath)
+
+	s.addTool("max_flow", "Compute maximum flow between source and sink (Edmonds-Karp)",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph":  map[string]any{"type": "string", "description": "Graph name"},
+				"source": map[string]any{"type": "string", "description": "Source node ID"},
+				"sink":   map[string]any{"type": "string", "description": "Sink node ID"},
+			},
+			"required": []string{"graph", "source", "sink"},
+		}, s.handleMaxFlow)
+
+	s.addTool("explain_path", "Get a human-readable explanation of the shortest path between two nodes",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+				"src":   map[string]any{"type": "string", "description": "Source node ID"},
+				"dst":   map[string]any{"type": "string", "description": "Destination node ID"},
+			},
+			"required": []string{"graph", "src", "dst"},
+		}, s.handleExplainPath)
+
+	s.addTool("explain_component", "Get a human-readable explanation of a node's component membership",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+				"id":    map[string]any{"type": "string", "description": "Node ID"},
+			},
+			"required": []string{"graph", "id"},
+		}, s.handleExplainComponent)
+
+	s.addTool("explain_centrality", "Get a human-readable explanation of a node's centrality ranking",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+				"id":    map[string]any{"type": "string", "description": "Node ID"},
+			},
+			"required": []string{"graph", "id"},
+		}, s.handleExplainCentrality)
+
+	s.addTool("explain_dependency", "Get a human-readable explanation of the dependency between two nodes",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"graph": map[string]any{"type": "string", "description": "Graph name"},
+				"src":   map[string]any{"type": "string", "description": "Source node ID"},
+				"dst":   map[string]any{"type": "string", "description": "Target node ID"},
+			},
+			"required": []string{"graph", "src", "dst"},
+		}, s.handleExplainDependency)
 }
