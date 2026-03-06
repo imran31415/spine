@@ -149,6 +149,42 @@ func TestReadDegrees(t *testing.T) {
 	}
 }
 
+func TestReadEdgeKeyProjection(t *testing.T) {
+	dir := tempDir(t)
+	mgr, _ := NewManager(dir)
+	mgr.Open("r")
+	// Create edge with metadata
+	mgr.Upsert(UpsertRequest{
+		Graph: "r",
+		Edges: []UpsertEdge{
+			{From: "a", To: "b", Label: "dep", Meta: map[string]any{"priority": float64(1), "tag": "important"}},
+		},
+	})
+
+	// Read with key projection — only "priority"
+	resp, err := mgr.ReadNodes(ReadNodesRequest{
+		Graph:        "r",
+		IncludeEdges: true,
+		Keys:         []string{"priority"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Edges) != 1 {
+		t.Fatalf("expected 1 edge, got %d", len(resp.Edges))
+	}
+	eMeta := resp.Edges[0].Meta
+	if eMeta == nil {
+		t.Fatal("expected edge meta")
+	}
+	if _, ok := eMeta["priority"]; !ok {
+		t.Error("expected priority key in edge meta")
+	}
+	if _, ok := eMeta["tag"]; ok {
+		t.Error("expected tag key to be excluded from edge meta by projection")
+	}
+}
+
 func TestReadEmptyResult(t *testing.T) {
 	mgr := setupReadGraph(t)
 	resp, err := mgr.ReadNodes(ReadNodesRequest{

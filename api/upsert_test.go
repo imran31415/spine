@@ -4,6 +4,8 @@ import (
 	"testing"
 )
 
+func floatPtr(f float64) *float64 { return &f }
+
 func TestUpsertCreateNodes(t *testing.T) {
 	dir := tempDir(t)
 	mgr, _ := NewManager(dir)
@@ -74,7 +76,7 @@ func TestUpsertEdgesAutoCreateNodes(t *testing.T) {
 
 	res, err := mgr.Upsert(UpsertRequest{
 		Graph: "u",
-		Edges: []UpsertEdge{{From: "x", To: "y", Label: "dep", Weight: 1.5}},
+		Edges: []UpsertEdge{{From: "x", To: "y", Label: "dep", Weight: floatPtr(1.5)}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -130,6 +132,37 @@ func TestUpsertMeta(t *testing.T) {
 	})
 	if res2.MetaKeysDeleted != 1 {
 		t.Errorf("expected 1 meta key deleted, got %d", res2.MetaKeysDeleted)
+	}
+}
+
+func TestUpsertEdgeWeightZero(t *testing.T) {
+	dir := tempDir(t)
+	mgr, _ := NewManager(dir)
+	mgr.Open("u")
+
+	// Create edge with weight 5
+	mgr.Upsert(UpsertRequest{
+		Graph: "u",
+		Edges: []UpsertEdge{{From: "a", To: "b", Weight: floatPtr(5.0)}},
+	})
+
+	// Update weight to 0
+	res, err := mgr.Upsert(UpsertRequest{
+		Graph: "u",
+		Edges: []UpsertEdge{{From: "a", To: "b", Weight: floatPtr(0)}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.EdgesUpdated != 1 {
+		t.Errorf("expected 1 edge updated, got %d", res.EdgesUpdated)
+	}
+
+	// Verify the weight is now 0
+	g, _ := mgr.OpenGraph("u")
+	e, _ := g.GetEdge("a", "b")
+	if e.Weight != 0 {
+		t.Errorf("expected weight 0, got %f", e.Weight)
 	}
 }
 

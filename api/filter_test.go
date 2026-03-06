@@ -100,6 +100,24 @@ func TestMatchFilter_MissingNode(t *testing.T) {
 	}
 }
 
+func TestMatchFilter_EqNumericCrossType(t *testing.T) {
+	g := newTestGraph()
+	// priority is stored as float64(10); compare with int 10
+	if !matchesFilters(g, "a", []MetaFilter{{Key: "priority", Op: "eq", Value: 10}}) {
+		t.Error("expected float64(10) == int(10)")
+	}
+	if !matchesFilters(g, "a", []MetaFilter{{Key: "priority", Op: "eq", Value: int64(10)}}) {
+		t.Error("expected float64(10) == int64(10)")
+	}
+	if matchesFilters(g, "a", []MetaFilter{{Key: "priority", Op: "eq", Value: 9}}) {
+		t.Error("expected float64(10) != int(9)")
+	}
+	// neq should also work correctly
+	if matchesFilters(g, "a", []MetaFilter{{Key: "priority", Op: "neq", Value: 10}}) {
+		t.Error("expected float64(10) neq int(10) to be false")
+	}
+}
+
 func TestMatchFilter_UnknownOp(t *testing.T) {
 	g := newTestGraph()
 	if matchesFilters(g, "a", []MetaFilter{{Key: "status", Op: "regex", Value: ".*"}}) {

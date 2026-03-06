@@ -70,8 +70,8 @@ func (m *Manager) Upsert(req UpsertRequest) (*UpsertResult, error) {
 				ed.Label = ue.Label
 				changed = true
 			}
-			if ue.Weight != 0 && ue.Weight != w {
-				w = ue.Weight
+			if ue.Weight != nil && *ue.Weight != w {
+				w = *ue.Weight
 				changed = true
 			}
 			if changed {
@@ -80,7 +80,11 @@ func (m *Manager) Upsert(req UpsertRequest) (*UpsertResult, error) {
 				res.EdgesUpdated++
 			}
 		} else {
-			_ = g.AddEdge(ue.From, ue.To, EdgeData{Label: ue.Label}, ue.Weight)
+			w := 0.0
+			if ue.Weight != nil {
+				w = *ue.Weight
+			}
+			_ = g.AddEdge(ue.From, ue.To, EdgeData{Label: ue.Label}, w)
 			res.EdgesCreated++
 		}
 

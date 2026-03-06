@@ -37,7 +37,7 @@ type UpsertEdge struct {
 	From   string         `json:"from"`
 	To     string         `json:"to"`
 	Label  string         `json:"label,omitempty"`
-	Weight float64        `json:"weight,omitempty"`
+	Weight *float64       `json:"weight,omitempty"`
 	Meta   map[string]any `json:"meta,omitempty"`
 	Delete []string       `json:"delete,omitempty"`
 }

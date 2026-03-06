@@ -24,8 +24,8 @@ func FilterEdges[N, E any](g *Graph[N, E], pred func(Edge[E]) bool) []Edge[E] {
 	return result
 }
 
-// Ancestors returns all transitive predecessors of the given node in a directed graph.
-// For undirected graphs, this returns all reachable nodes.
+// Ancestors returns all transitive predecessors of the given node in a directed graph,
+// sorted by ID. For undirected graphs, this returns all reachable nodes.
 func Ancestors[N, E any](g *Graph[N, E], id string) []string {
 	visited := make(map[string]bool)
 	var walk func(string)
@@ -43,10 +43,12 @@ func Ancestors[N, E any](g *Graph[N, E], id string) []string {
 	for v := range visited {
 		result = append(result, v)
 	}
+	sort.Strings(result)
 	return result
 }
 
-// Descendants returns all transitive successors of the given node in a directed graph.
+// Descendants returns all transitive successors of the given node in a directed graph,
+// sorted by ID.
 func Descendants[N, E any](g *Graph[N, E], id string) []string {
 	visited := make(map[string]bool)
 	var walk func(string)
@@ -64,6 +66,7 @@ func Descendants[N, E any](g *Graph[N, E], id string) []string {
 	for v := range visited {
 		result = append(result, v)
 	}
+	sort.Strings(result)
 	return result
 }
 

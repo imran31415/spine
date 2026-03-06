@@ -541,6 +541,37 @@ func TestLeaves(t *testing.T) {
 	}
 }
 
+func TestEmptyGraphName(t *testing.T) {
+	srv := newTestServer(t)
+
+	// Tools that accept "name" param.
+	for _, tool := range []string{"open_graph", "save_graph", "delete_graph", "graph_summary"} {
+		tcr := callTool(t, srv, tool, map[string]any{"name": ""})
+		if !tcr.IsError {
+			t.Errorf("%s: expected error for empty name", tool)
+		}
+	}
+
+	// Tools that accept "graph" param.
+	for _, tool := range []string{
+		"upsert", "read_nodes", "transition", "remove",
+		"scc", "mst", "bfs", "dfs", "shortest_path", "topological_sort",
+		"cycle_detect", "connected_components", "ancestors", "descendants",
+		"roots", "leaves",
+	} {
+		tcr := callTool(t, srv, tool, map[string]any{"graph": ""})
+		if !tcr.IsError {
+			t.Errorf("%s: expected error for empty graph name", tool)
+		}
+	}
+
+	// Whitespace-only should also be rejected.
+	tcr := callTool(t, srv, "open_graph", map[string]any{"name": "   "})
+	if !tcr.IsError {
+		t.Error("open_graph: expected error for whitespace-only name")
+	}
+}
+
 func TestParseError(t *testing.T) {
 	srv := newTestServer(t)
 

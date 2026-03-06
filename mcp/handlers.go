@@ -2,14 +2,24 @@ package mcp
 
 import (
 	"encoding/json"
-	"sort"
+	"errors"
+	"strings"
 
 	"github.com/imran31415/spine"
 	"github.com/imran31415/spine/api"
 )
 
+var errEmptyName = errors.New("graph name must not be empty")
+
 type nameArg struct {
 	Name string `json:"name"`
+}
+
+func requireName(name string) error {
+	if strings.TrimSpace(name) == "" {
+		return errEmptyName
+	}
+	return nil
 }
 
 func (s *Server) handleOpenGraph(args json.RawMessage) (any, error) {
@@ -18,6 +28,9 @@ func (s *Server) handleOpenGraph(args json.RawMessage) (any, error) {
 		Directed *bool  `json:"directed,omitempty"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
+		return nil, err
+	}
+	if err := requireName(a.Name); err != nil {
 		return nil, err
 	}
 	directed := true
@@ -30,6 +43,9 @@ func (s *Server) handleOpenGraph(args json.RawMessage) (any, error) {
 func (s *Server) handleSaveGraph(args json.RawMessage) (any, error) {
 	var a nameArg
 	if err := json.Unmarshal(args, &a); err != nil {
+		return nil, err
+	}
+	if err := requireName(a.Name); err != nil {
 		return nil, err
 	}
 	if err := s.mgr.Save(a.Name); err != nil {
@@ -47,6 +63,9 @@ func (s *Server) handleDeleteGraph(args json.RawMessage) (any, error) {
 	if err := json.Unmarshal(args, &a); err != nil {
 		return nil, err
 	}
+	if err := requireName(a.Name); err != nil {
+		return nil, err
+	}
 	if err := s.mgr.Delete(a.Name); err != nil {
 		return nil, err
 	}
@@ -58,12 +77,18 @@ func (s *Server) handleGraphSummary(args json.RawMessage) (any, error) {
 	if err := json.Unmarshal(args, &a); err != nil {
 		return nil, err
 	}
+	if err := requireName(a.Name); err != nil {
+		return nil, err
+	}
 	return s.mgr.Summary(a.Name)
 }
 
 func (s *Server) handleUpsert(args json.RawMessage) (any, error) {
 	var req api.UpsertRequest
 	if err := json.Unmarshal(args, &req); err != nil {
+		return nil, err
+	}
+	if err := requireName(req.Graph); err != nil {
 		return nil, err
 	}
 	return s.mgr.Upsert(req)
@@ -74,12 +99,18 @@ func (s *Server) handleReadNodes(args json.RawMessage) (any, error) {
 	if err := json.Unmarshal(args, &req); err != nil {
 		return nil, err
 	}
+	if err := requireName(req.Graph); err != nil {
+		return nil, err
+	}
 	return s.mgr.ReadNodes(req)
 }
 
 func (s *Server) handleTransition(args json.RawMessage) (any, error) {
 	var req api.TransitionRequest
 	if err := json.Unmarshal(args, &req); err != nil {
+		return nil, err
+	}
+	if err := requireName(req.Graph); err != nil {
 		return nil, err
 	}
 	return s.mgr.Transition(req)
@@ -90,6 +121,9 @@ func (s *Server) handleRemove(args json.RawMessage) (any, error) {
 	if err := json.Unmarshal(args, &req); err != nil {
 		return nil, err
 	}
+	if err := requireName(req.Graph); err != nil {
+		return nil, err
+	}
 	return s.mgr.Remove(req)
 }
 
@@ -98,6 +132,9 @@ func (s *Server) handleSCC(args json.RawMessage) (any, error) {
 		Graph string `json:"graph"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
+		return nil, err
+	}
+	if err := requireName(a.Graph); err != nil {
 		return nil, err
 	}
 	g, err := s.mgr.OpenGraph(a.Graph)
@@ -113,6 +150,9 @@ func (s *Server) handleMST(args json.RawMessage) (any, error) {
 		Graph string `json:"graph"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
+		return nil, err
+	}
+	if err := requireName(a.Graph); err != nil {
 		return nil, err
 	}
 	g, err := s.mgr.OpenGraph(a.Graph)
@@ -143,6 +183,9 @@ func (s *Server) handleBFS(args json.RawMessage) (any, error) {
 	if err := json.Unmarshal(args, &a); err != nil {
 		return nil, err
 	}
+	if err := requireName(a.Graph); err != nil {
+		return nil, err
+	}
 	g, err := s.mgr.OpenGraph(a.Graph)
 	if err != nil {
 		return nil, err
@@ -157,6 +200,9 @@ func (s *Server) handleDFS(args json.RawMessage) (any, error) {
 		Start string `json:"start"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
+		return nil, err
+	}
+	if err := requireName(a.Graph); err != nil {
 		return nil, err
 	}
 	g, err := s.mgr.OpenGraph(a.Graph)
@@ -174,6 +220,9 @@ func (s *Server) handleShortestPath(args json.RawMessage) (any, error) {
 		Dst   string `json:"dst"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
+		return nil, err
+	}
+	if err := requireName(a.Graph); err != nil {
 		return nil, err
 	}
 	g, err := s.mgr.OpenGraph(a.Graph)
@@ -194,6 +243,9 @@ func (s *Server) handleTopologicalSort(args json.RawMessage) (any, error) {
 	if err := json.Unmarshal(args, &a); err != nil {
 		return nil, err
 	}
+	if err := requireName(a.Graph); err != nil {
+		return nil, err
+	}
 	g, err := s.mgr.OpenGraph(a.Graph)
 	if err != nil {
 		return nil, err
@@ -212,6 +264,9 @@ func (s *Server) handleCycleDetect(args json.RawMessage) (any, error) {
 	if err := json.Unmarshal(args, &a); err != nil {
 		return nil, err
 	}
+	if err := requireName(a.Graph); err != nil {
+		return nil, err
+	}
 	g, err := s.mgr.OpenGraph(a.Graph)
 	if err != nil {
 		return nil, err
@@ -225,6 +280,9 @@ func (s *Server) handleConnectedComponents(args json.RawMessage) (any, error) {
 		Graph string `json:"graph"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
+		return nil, err
+	}
+	if err := requireName(a.Graph); err != nil {
 		return nil, err
 	}
 	g, err := s.mgr.OpenGraph(a.Graph)
@@ -243,12 +301,14 @@ func (s *Server) handleAncestors(args json.RawMessage) (any, error) {
 	if err := json.Unmarshal(args, &a); err != nil {
 		return nil, err
 	}
+	if err := requireName(a.Graph); err != nil {
+		return nil, err
+	}
 	g, err := s.mgr.OpenGraph(a.Graph)
 	if err != nil {
 		return nil, err
 	}
 	anc := spine.Ancestors(g, a.ID)
-	sort.Strings(anc)
 	return map[string]any{"ancestors": anc}, nil
 }
 
@@ -260,12 +320,14 @@ func (s *Server) handleDescendants(args json.RawMessage) (any, error) {
 	if err := json.Unmarshal(args, &a); err != nil {
 		return nil, err
 	}
+	if err := requireName(a.Graph); err != nil {
+		return nil, err
+	}
 	g, err := s.mgr.OpenGraph(a.Graph)
 	if err != nil {
 		return nil, err
 	}
 	desc := spine.Descendants(g, a.ID)
-	sort.Strings(desc)
 	return map[string]any{"descendants": desc}, nil
 }
 
@@ -274,6 +336,9 @@ func (s *Server) handleRoots(args json.RawMessage) (any, error) {
 		Graph string `json:"graph"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
+		return nil, err
+	}
+	if err := requireName(a.Graph); err != nil {
 		return nil, err
 	}
 	g, err := s.mgr.OpenGraph(a.Graph)
@@ -293,6 +358,9 @@ func (s *Server) handleLeaves(args json.RawMessage) (any, error) {
 		Graph string `json:"graph"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
+		return nil, err
+	}
+	if err := requireName(a.Graph); err != nil {
 		return nil, err
 	}
 	g, err := s.mgr.OpenGraph(a.Graph)

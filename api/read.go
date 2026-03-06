@@ -91,7 +91,7 @@ func (m *Manager) ReadNodes(req ReadNodesRequest) (*ReadNodesResponse, error) {
 				Weight: e.Weight,
 			}
 			edgeMeta := g.EdgeMeta(e.From, e.To)
-			er.Meta = projectMeta(edgeMeta, nil)
+			er.Meta = projectMeta(edgeMeta, keySet)
 			resp.Edges = append(resp.Edges, er)
 		}
 	}

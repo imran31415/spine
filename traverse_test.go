@@ -182,8 +182,48 @@ func TestCycleDetect(t *testing.T) {
 	if !hasCycle {
 		t.Fatal("expected cycle")
 	}
+	if len(cycle) != 3 {
+		t.Fatalf("expected 3-node cycle, got %v", cycle)
+	}
+	// Verify cycle is complete: each node in cycle should have an edge to the next,
+	// and the last should have an edge back to the first.
+	for i := 0; i < len(cycle); i++ {
+		from := cycle[i]
+		to := cycle[(i+1)%len(cycle)]
+		if !g.HasEdge(from, to) {
+			t.Fatalf("cycle broken: no edge %s -> %s in cycle %v", from, to, cycle)
+		}
+	}
+}
+
+func TestCycleDetectNestedCycle(t *testing.T) {
+	// x -> a -> b -> c -> d -> b (cycle is b->c->d->b, not involving x or a)
+	g := NewGraph[int, int](true)
+	g.AddNode("x", 0)
+	g.AddNode("a", 1)
+	g.AddNode("b", 2)
+	g.AddNode("c", 3)
+	g.AddNode("d", 4)
+	g.AddEdge("x", "a", 0, 0)
+	g.AddEdge("a", "b", 0, 0)
+	g.AddEdge("b", "c", 0, 0)
+	g.AddEdge("c", "d", 0, 0)
+	g.AddEdge("d", "b", 0, 0)
+
+	hasCycle, cycle := CycleDetect(g)
+	if !hasCycle {
+		t.Fatal("expected cycle")
+	}
 	if len(cycle) < 2 {
 		t.Fatalf("cycle too short: %v", cycle)
+	}
+	// Verify cycle is valid: each consecutive pair has an edge
+	for i := 0; i < len(cycle); i++ {
+		from := cycle[i]
+		to := cycle[(i+1)%len(cycle)]
+		if !g.HasEdge(from, to) {
+			t.Fatalf("cycle broken: no edge %s -> %s in cycle %v", from, to, cycle)
+		}
 	}
 }
 
