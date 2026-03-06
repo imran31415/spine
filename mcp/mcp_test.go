@@ -120,8 +120,8 @@ func TestToolsList(t *testing.T) {
 	}
 	json.Unmarshal(b, &result)
 
-	if len(result.Tools) != 21 {
-		t.Errorf("expected 21 tools, got %d", len(result.Tools))
+	if len(result.Tools) != 35 {
+		t.Errorf("expected 35 tools, got %d", len(result.Tools))
 	}
 
 	names := make(map[string]bool)
@@ -134,6 +134,10 @@ func TestToolsList(t *testing.T) {
 		"scc", "mst",
 		"bfs", "dfs", "shortest_path", "topological_sort", "cycle_detect",
 		"connected_components", "ancestors", "descendants", "roots", "leaves",
+		"transitive_closure", "validate_graph", "diff_graphs",
+		"degree_centrality", "betweenness_centrality", "closeness_centrality", "pagerank",
+		"all_pairs_shortest_paths", "critical_path", "max_flow",
+		"explain_path", "explain_component", "explain_centrality", "explain_dependency",
 	} {
 		if !names[expected] {
 			t.Errorf("missing tool: %s", expected)
@@ -558,6 +562,10 @@ func TestEmptyGraphName(t *testing.T) {
 		"scc", "mst", "bfs", "dfs", "shortest_path", "topological_sort",
 		"cycle_detect", "connected_components", "ancestors", "descendants",
 		"roots", "leaves",
+		"transitive_closure", "validate_graph",
+		"degree_centrality", "betweenness_centrality", "closeness_centrality", "pagerank",
+		"all_pairs_shortest_paths", "critical_path", "max_flow",
+		"explain_path", "explain_component", "explain_centrality", "explain_dependency",
 	} {
 		tcr := callTool(t, srv, tool, map[string]any{"graph": ""})
 		if !tcr.IsError {
@@ -569,6 +577,322 @@ func TestEmptyGraphName(t *testing.T) {
 	tcr := callTool(t, srv, "open_graph", map[string]any{"name": "   "})
 	if !tcr.IsError {
 		t.Error("open_graph: expected error for whitespace-only name")
+	}
+}
+
+func TestDiffGraphsEmptyName(t *testing.T) {
+	srv := newTestServer(t)
+	tcr := callTool(t, srv, "diff_graphs", map[string]any{"graph_a": "", "graph_b": "x"})
+	if !tcr.IsError {
+		t.Error("diff_graphs: expected error for empty graph_a name")
+	}
+	tcr = callTool(t, srv, "diff_graphs", map[string]any{"graph_a": "x", "graph_b": ""})
+	if !tcr.IsError {
+		t.Error("diff_graphs: expected error for empty graph_b name")
+	}
+}
+
+func TestTransitiveClosure(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "transitive_closure", map[string]any{"graph": "dag"})
+	if tcr.IsError {
+		t.Fatalf("transitive_closure failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		NodeCount int `json:"node_count"`
+		EdgeCount int `json:"edge_count"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if result.NodeCount != 3 {
+		t.Fatalf("expected 3 nodes, got %d", result.NodeCount)
+	}
+	// a->b, a->c, b->c = 3 edges
+	if result.EdgeCount != 3 {
+		t.Fatalf("expected 3 edges in closure, got %d", result.EdgeCount)
+	}
+}
+
+func TestValidateGraph(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "validate_graph", map[string]any{"graph": "dag"})
+	if tcr.IsError {
+		t.Fatalf("validate_graph failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		Valid bool `json:"valid"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if !result.Valid {
+		t.Fatal("expected valid graph")
+	}
+}
+
+func TestDiffGraphs(t *testing.T) {
+	srv := newTestServer(t)
+
+	// Create two graphs
+	callTool(t, srv, "open_graph", map[string]any{"name": "g1"})
+	callTool(t, srv, "upsert", map[string]any{
+		"graph": "g1",
+		"nodes": []map[string]any{{"id": "a"}, {"id": "b"}},
+		"edges": []map[string]any{{"from": "a", "to": "b", "weight": 1.0}},
+	})
+
+	callTool(t, srv, "open_graph", map[string]any{"name": "g2"})
+	callTool(t, srv, "upsert", map[string]any{
+		"graph": "g2",
+		"nodes": []map[string]any{{"id": "a"}, {"id": "c"}},
+		"edges": []map[string]any{{"from": "a", "to": "c", "weight": 2.0}},
+	})
+
+	tcr := callTool(t, srv, "diff_graphs", map[string]any{"graph_a": "g1", "graph_b": "g2"})
+	if tcr.IsError {
+		t.Fatalf("diff_graphs failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		NodesAdded   []string `json:"nodes_added"`
+		NodesRemoved []string `json:"nodes_removed"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if len(result.NodesAdded) != 1 || result.NodesAdded[0] != "c" {
+		t.Fatalf("expected node c added, got %v", result.NodesAdded)
+	}
+}
+
+func TestDegreeCentrality(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "degree_centrality", map[string]any{"graph": "dag"})
+	if tcr.IsError {
+		t.Fatalf("degree_centrality failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		Scores map[string]float64 `json:"scores"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if len(result.Scores) != 3 {
+		t.Fatalf("expected 3 scores, got %d", len(result.Scores))
+	}
+}
+
+func TestBetweennessCentrality(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "betweenness_centrality", map[string]any{"graph": "dag"})
+	if tcr.IsError {
+		t.Fatalf("betweenness_centrality failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		Scores map[string]float64 `json:"scores"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if len(result.Scores) != 3 {
+		t.Fatalf("expected 3 scores, got %d", len(result.Scores))
+	}
+}
+
+func TestClosenessCentrality(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "closeness_centrality", map[string]any{"graph": "dag"})
+	if tcr.IsError {
+		t.Fatalf("closeness_centrality failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		Scores map[string]float64 `json:"scores"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if len(result.Scores) != 3 {
+		t.Fatalf("expected 3 scores, got %d", len(result.Scores))
+	}
+}
+
+func TestPageRank(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "pagerank", map[string]any{"graph": "dag"})
+	if tcr.IsError {
+		t.Fatalf("pagerank failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		Scores    map[string]float64 `json:"scores"`
+		Converged bool               `json:"converged"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if len(result.Scores) != 3 {
+		t.Fatalf("expected 3 scores, got %d", len(result.Scores))
+	}
+}
+
+func TestPageRankCustomParams(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "pagerank", map[string]any{
+		"graph":     "dag",
+		"damping":   0.9,
+		"max_iter":  50,
+		"tolerance": 0.001,
+	})
+	if tcr.IsError {
+		t.Fatalf("pagerank with params failed: %s", tcr.Content[0].Text)
+	}
+}
+
+func TestAllPairsShortestPaths(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "all_pairs_shortest_paths", map[string]any{"graph": "dag"})
+	if tcr.IsError {
+		t.Fatalf("all_pairs_shortest_paths failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		Dist map[string]map[string]float64 `json:"dist"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	// a->c should be 3 (a->b:1 + b->c:2)
+	if result.Dist["a"]["c"] != 3.0 {
+		t.Fatalf("expected dist a->c = 3, got %f", result.Dist["a"]["c"])
+	}
+}
+
+func TestCriticalPath(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "critical_path", map[string]any{"graph": "dag"})
+	if tcr.IsError {
+		t.Fatalf("critical_path failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		Path   []string `json:"path"`
+		Length float64  `json:"length"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if result.Length != 3.0 {
+		t.Fatalf("expected length 3, got %f", result.Length)
+	}
+}
+
+func TestMaxFlow(t *testing.T) {
+	srv := newTestServer(t)
+
+	callTool(t, srv, "open_graph", map[string]any{"name": "flow"})
+	callTool(t, srv, "upsert", map[string]any{
+		"graph": "flow",
+		"nodes": []map[string]any{{"id": "s"}, {"id": "a"}, {"id": "t"}},
+		"edges": []map[string]any{
+			{"from": "s", "to": "a", "weight": 10.0},
+			{"from": "a", "to": "t", "weight": 5.0},
+		},
+	})
+
+	tcr := callTool(t, srv, "max_flow", map[string]any{
+		"graph": "flow", "source": "s", "sink": "t",
+	})
+	if tcr.IsError {
+		t.Fatalf("max_flow failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		MaxFlow float64 `json:"max_flow"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if result.MaxFlow != 5.0 {
+		t.Fatalf("expected max flow 5, got %f", result.MaxFlow)
+	}
+}
+
+func TestExplainPath(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "explain_path", map[string]any{
+		"graph": "dag", "src": "a", "dst": "c",
+	})
+	if tcr.IsError {
+		t.Fatalf("explain_path failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		PathLength  int    `json:"path_length"`
+		Explanation string `json:"explanation"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if result.PathLength != 2 {
+		t.Fatalf("expected path length 2, got %d", result.PathLength)
+	}
+}
+
+func TestExplainComponent(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "explain_component", map[string]any{
+		"graph": "dag", "id": "a",
+	})
+	if tcr.IsError {
+		t.Fatalf("explain_component failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		ComponentSize int    `json:"component_size"`
+		Explanation   string `json:"explanation"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if result.ComponentSize == 0 {
+		t.Fatal("expected non-zero component size")
+	}
+}
+
+func TestExplainCentrality(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "explain_centrality", map[string]any{
+		"graph": "dag", "id": "a",
+	})
+	if tcr.IsError {
+		t.Fatalf("explain_centrality failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		Rank       int    `json:"rank"`
+		TotalNodes int    `json:"total_nodes"`
+		Explanation string `json:"explanation"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if result.TotalNodes != 3 {
+		t.Fatalf("expected 3 total nodes, got %d", result.TotalNodes)
+	}
+}
+
+func TestExplainDependency(t *testing.T) {
+	srv := newTestServer(t)
+	setupDAG(t, srv)
+
+	tcr := callTool(t, srv, "explain_dependency", map[string]any{
+		"graph": "dag", "src": "a", "dst": "c",
+	})
+	if tcr.IsError {
+		t.Fatalf("explain_dependency failed: %s", tcr.Content[0].Text)
+	}
+	var result struct {
+		IsDirect     bool   `json:"is_direct"`
+		IsTransitive bool   `json:"is_transitive"`
+		Explanation  string `json:"explanation"`
+	}
+	json.Unmarshal([]byte(tcr.Content[0].Text), &result)
+	if result.IsDirect {
+		t.Fatal("expected no direct dependency from a to c")
+	}
+	if !result.IsTransitive {
+		t.Fatal("expected transitive dependency from a to c")
 	}
 }
 
